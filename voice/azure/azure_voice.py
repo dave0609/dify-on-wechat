@@ -7,6 +7,7 @@ import time
 
 import azure.cognitiveservices.speech as speechsdk
 from langid import classify
+from voice.audio_convert import any_to_mp3
 
 from bridge.reply import Reply, ReplyType
 from common.log import logger
@@ -81,13 +82,18 @@ class AzureVoice(Voice):
         else:
             self.speech_config.speech_synthesis_voice_name = self.config["speech_synthesis_voice_name"]
         # Avoid the same filename under multithreading
-        fileName = TmpDir().path() + "reply-" + str(int(time.time())) + "-" + str(hash(text) & 0x7FFFFFFF) + ".wav"
-        audio_config = speechsdk.AudioConfig(filename=fileName)
+        wav_file = TmpDir().path() + "reply-" + str(int(time.time())) + "-" + str(hash(text) & 0x7FFFFFFF) + ".wav"
+        audio_config = speechsdk.AudioConfig(filename=wav_file)
         speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=self.speech_config, audio_config=audio_config)
         result = speech_synthesizer.speak_text(text)
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            logger.info("[Azure] textToVoice text={} voice file name={}".format(text, fileName))
-            reply = Reply(ReplyType.VOICE, fileName)
+            # 转换为mp3格式
+            mp3_file = wav_file.replace(".wav", ".mp3")
+            any_to_mp3(wav_file, mp3_file)
+            # 删除原始wav文件
+            os.remove(wav_file)
+            logger.info("[Azure] textToVoice text={} voice file name={}".format(text, mp3_file))
+            reply = Reply(ReplyType.VOICE, mp3_file)
         else:
             cancel_details = result.cancellation_details
             logger.error("[Azure] textToVoice error, result={}, errordetails={}".format(result, cancel_details.error_details))
