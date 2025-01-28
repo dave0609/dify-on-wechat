@@ -1,0 +1,4 @@
+Pillow
+rembg
+opencv-python
+translators
