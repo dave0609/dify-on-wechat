@@ -87,7 +87,7 @@ class AzureVoice(Voice):
         result = speech_synthesizer.speak_text(text)
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
             logger.info("[Azure] textToVoice text={} voice file name={}".format(text, fileName))
-            reply = Reply(ReplyType.VOICE, fileName)
+            reply = Reply(ReplyType.FILE, fileName)
         else:
             cancel_details = result.cancellation_details
             logger.error("[Azure] textToVoice error, result={}, errordetails={}".format(result, cancel_details.error_details))
