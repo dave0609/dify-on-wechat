@@ -96,14 +96,13 @@ class ChatChannel(Channel):
 
         # 消息内容匹配过程，并处理content
         if ctype == ContextType.TEXT:
-            logger.info(f"[chat_channel] 收到文本消息:")
+            logger.info("[chat_channel] 收到文本消息:")
             logger.info(f"[chat_channel] 原始content={content}")
             logger.info(f"[chat_channel] isgroup={context.get('isgroup', False)}")
             logger.info(f"[chat_channel] session_id={context.get('session_id', '')}")
             logger.info(f"[chat_channel] from_user={context['msg'].from_user_id}")
             nick_name_black_list = conf().get("nick_name_black_list", [])
             if context.get("isgroup", False):  # 群聊
-                logger.info("[chat_channel] to_user_id != actual_user_id 条件成立")
 
                 # 校验关键字
                 match_prefix = check_prefix(content, conf().get("group_chat_prefix"))
@@ -111,6 +110,8 @@ class ChatChannel(Channel):
                 logger.info(f"[chat_channel] 群聊前缀匹配结果: match_prefix={match_prefix}, match_contain={match_contain}")
                 flag = False
                 if context["msg"].to_user_id != context["msg"].actual_user_id:
+                    logger.info("[chat_channel] to_user_id != actual_user_id 条件成立")
+
                     if match_prefix is not None or match_contain is not None:
                         flag = True
                         if match_prefix:
