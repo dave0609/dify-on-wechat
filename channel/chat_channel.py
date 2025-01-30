@@ -103,9 +103,12 @@ class ChatChannel(Channel):
             logger.info(f"[chat_channel] from_user={context['msg'].from_user_id}")
             nick_name_black_list = conf().get("nick_name_black_list", [])
             if context.get("isgroup", False):  # 群聊
+                logger.info("[chat_channel] to_user_id != actual_user_id 条件成立")
+
                 # 校验关键字
                 match_prefix = check_prefix(content, conf().get("group_chat_prefix"))
                 match_contain = check_contain(content, conf().get("group_chat_keyword"))
+                logger.info(f"[chat_channel] 群聊前缀匹配结果: match_prefix={match_prefix}, match_contain={match_contain}")
                 flag = False
                 if context["msg"].to_user_id != context["msg"].actual_user_id:
                     if match_prefix is not None or match_contain is not None:
@@ -134,6 +137,9 @@ class ChatChannel(Channel):
                             pattern = f"@{re.escape(context['msg'].self_display_name)}(\u2005|\u0020)"
                             subtract_res = re.sub(pattern, r"", content)
                         content = subtract_res
+                else:
+                    logger.info("[chat_channel] to_user_id == actual_user_id 条件不成立，消息被过滤")
+                
                 if not flag:
                     if context["origin_ctype"] == ContextType.VOICE:
                         logger.info("[chat_channel]receive group voice, but checkprefix didn't match")
