@@ -96,6 +96,11 @@ class ChatChannel(Channel):
 
         # 消息内容匹配过程，并处理content
         if ctype == ContextType.TEXT:
+            logger.info(f"[chat_channel] 收到文本消息:")
+            logger.info(f"[chat_channel] 原始content={content}")
+            logger.info(f"[chat_channel] isgroup={context.get('isgroup', False)}")
+            logger.info(f"[chat_channel] session_id={context.get('session_id', '')}")
+            logger.info(f"[chat_channel] from_user={context['msg'].from_user_id}")
             nick_name_black_list = conf().get("nick_name_black_list", [])
             if context.get("isgroup", False):  # 群聊
                 # 校验关键字
