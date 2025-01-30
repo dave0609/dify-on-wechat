@@ -539,10 +539,6 @@ class GeWeChatMessage(ChatMessage):
                 group_chat_keyword = conf().get("group_chat_keyword", [])
                 preserved_keywords = set(group_chat_prefix + group_chat_keyword)
                 
-                # 记录原始内容，用于调试
-                logger.info(f"[gewechat] 清理前content: {self.content}")
-                logger.info(f"[gewechat] 保留的关键词: {preserved_keywords}")
-                
                 # 3. 只有不在preserved_keywords中的@信息才会被过滤
                 for at_text in re.findall(r'@[^\s]+\s', self.content):
                     at_name = at_text.strip()

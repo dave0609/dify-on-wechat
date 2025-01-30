@@ -107,10 +107,6 @@ class stability(Plugin):
             logger.debug('Added new user to params_cache. user id = ' + user_id)
 
         if e_context['context'].type == ContextType.TEXT:
-            logger.info(f"[stability] 收到文本消息: content='{content}'")
-            logger.info(f"[stability] content type={type(content)}")
-            logger.info(f"[stability] context type={e_context['context'].type}")
-            logger.info(f"[stability] jimeng_prefix='{self.jimeng_prefix}'")
             if content.startswith(self.inpaint_prefix):
                 # Call new function to handle search operation
                 pattern = self.inpaint_prefix + r"\s(.+)"
