@@ -455,12 +455,12 @@ class GeWeChatMessage(ChatMessage):
                 }
             }
             """
-            logger.debug(f"[gewechat] Group message detected:")
-            logger.debug(f"[gewechat] Raw message content: {self.msg.get('Data', {}).get('Content', {}).get('string', '')}")
-            logger.debug(f"[gewechat] From user: {self.from_user_id}")
-            logger.debug(f"[gewechat] To user: {self.to_user_id}")
-            logger.debug(f"[gewechat] Message type: {msg_type}")
-            logger.debug(f"[gewechat] Current content: {self.content}")
+            logger.info(f"[gewechat] Group message detected:")
+            logger.info(f"[gewechat] Raw message content: {self.msg.get('Data', {}).get('Content', {}).get('string', '')}")
+            logger.info(f"[gewechat] From user: {self.from_user_id}")
+            logger.info(f"[gewechat] To user: {self.to_user_id}")
+            logger.info(f"[gewechat] Message type: {msg_type}")
+            logger.info(f"[gewechat] Current content: {self.content}")
             
             # 获取实际发送者wxid
             self.actual_user_id = self.msg.get('Data', {}).get('Content', {}).get('string', '').split(':', 1)[0]  # 实际发送者ID
