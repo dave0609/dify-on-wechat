@@ -531,8 +531,14 @@ class GeWeChatMessage(ChatMessage):
 
             # 如果是群消息，使用正则表达式去掉wxid前缀和@信息
             if self.content is not None:  # 添加检查
-                self.content = re.sub(f'{self.actual_user_id}:\n', '', self.content)  # 去掉wxid前缀
-                self.content = re.sub(r'@[^\u2005]+\u2005', '', self.content)  # 去掉@信息
+                # 1. 去掉wxid前缀
+                self.content = re.sub(f'{self.actual_user_id}:\n', '', self.content)
+                # 2. 去掉@信息
+                self.content = re.sub(r'@[^\s]+\s+', '', self.content)
+                # 3. 清理多余空白字符
+                self.content = self.content.strip()
+                
+                logger.info(f"[gewechat] Cleaned content: {self.content}")
             else:
                 logger.warning(f"[gewechat] Content is None for group message with msg_id: {self.msg_id}")
                 self.content = ""  # 设置默认值
