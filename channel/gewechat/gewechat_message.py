@@ -531,9 +531,27 @@ class GeWeChatMessage(ChatMessage):
 
             # 如果是群消息，使用正则表达式去掉wxid前缀和@信息
             if self.content is not None:  # 添加检查
-                self.content = re.sub(f'{self.actual_user_id}:\n', '', self.content)  # 去掉wxid前缀
-                self.content = re.sub(r'@[^\u2005]+\u2005', '', self.content)  # 去掉@信息
-                logger.info(f"[gewechat] content: {self.content}")
+                # 1. 去掉wxid前缀
+                self.content = re.sub(f'{self.actual_user_id}:\n', '', self.content)
+                
+                # 2. 保留配置的前缀，去掉其他@信息
+                group_chat_prefix = conf().get("group_chat_prefix", [])
+                group_chat_keyword = conf().get("group_chat_keyword", [])
+                preserved_keywords = set(group_chat_prefix + group_chat_keyword)
+                
+                # 记录原始内容，用于调试
+                logger.info(f"[gewechat] 清理前content: {self.content}")
+                logger.info(f"[gewechat] 保留的关键词: {preserved_keywords}")
+                
+                # 3. 只有不在preserved_keywords中的@信息才会被过滤
+                for at_text in re.findall(r'@[^\s]+\s', self.content):
+                    at_name = at_text.strip()
+                    if at_name not in preserved_keywords:
+                        self.content = self.content.replace(at_text, '')
+                
+                # 4. 清理多余空格
+                self.content = self.content.strip()
+                logger.info(f"[gewechat] 清理后content: {self.content}")
             else:
                 logger.warning(f"[gewechat] Content is None for group message with msg_id: {self.msg_id}")
                 self.content = ""  # 设置默认值
