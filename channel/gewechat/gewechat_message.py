@@ -523,8 +523,12 @@ class GeWeChatMessage(ChatMessage):
                 logger.debug(f"[gewechat] Parse is_at from PushContent. self.is_at: {self.is_at}")
 
             # 如果是群消息，使用正则表达式去掉wxid前缀和@信息
-            self.content = re.sub(f'{self.actual_user_id}:\n', '', self.content)  # 去掉wxid前缀
-            self.content = re.sub(r'@[^\u2005]+\u2005', '', self.content)  # 去掉@信息
+            if self.content is not None:  # 添加检查
+                self.content = re.sub(f'{self.actual_user_id}:\n', '', self.content)  # 去掉wxid前缀
+                self.content = re.sub(r'@[^\u2005]+\u2005', '', self.content)  # 去掉@信息
+            else:
+                logger.warning(f"[gewechat] Content is None for group message with msg_id: {self.msg_id}")
+                self.content = ""  # 设置默认值
         else:
             # 如果不是群聊消息，保持结构统一，也要设置actual_user_id和actual_user_nickname
             self.actual_user_id = self.other_user_id
