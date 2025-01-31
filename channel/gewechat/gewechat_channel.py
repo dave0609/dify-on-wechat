@@ -130,6 +130,20 @@ class GeWeChatChannel(ChatChannel):
                     logger.error(f"[gewechat] voice file is not mp3, path: {content}, only support mp3")
             except Exception as e:
                 logger.error(f"[gewechat] send voice failed: {e}")
+        elif reply.type == ReplyType.FILE:
+            try:
+                file_path = reply.content
+                # 获取文件名
+                file_name = os.path.basename(file_path)
+                # 构造回调URL
+                callback_url = conf().get("gewechat_callback_url")
+                file_url = callback_url + "?file=" + file_path
+                
+                # 调用发送文件API
+                self.client.post_file(self.app_id, receiver, file_url, file_name)
+                logger.info(f"[gewechat] Do send file to {receiver}: file_name={file_name}, file_url={file_url}")
+            except Exception as e:
+                logger.error(f"[gewechat] send file failed: {e}")
         elif reply.type == ReplyType.IMAGE_URL:
             img_url = reply.content
             self.client.post_image(self.app_id, receiver, img_url)

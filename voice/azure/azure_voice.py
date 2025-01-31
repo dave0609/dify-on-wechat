@@ -81,13 +81,13 @@ class AzureVoice(Voice):
         else:
             self.speech_config.speech_synthesis_voice_name = self.config["speech_synthesis_voice_name"]
         # Avoid the same filename under multithreading
-        fileName = TmpDir().path() + "reply-" + str(int(time.time())) + "-" + str(hash(text) & 0x7FFFFFFF) + ".wav"
-        audio_config = speechsdk.AudioConfig(filename=fileName)
+        file_name = TmpDir().path() + "reply-" + str(int(time.time())) + "-" + str(hash(text) & 0x7FFFFFFF) + ".wav"
+        audio_config = speechsdk.AudioConfig(filename=file_name)
         speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=self.speech_config, audio_config=audio_config)
         result = speech_synthesizer.speak_text(text)
         if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-            logger.info("[Azure] textToVoice text={} voice file name={}".format(text, fileName))
-            reply = Reply(ReplyType.FILE, fileName)
+            logger.info("[Azure] textToVoice text={} voice file name={}".format(text, file_name))
+            reply = Reply(ReplyType.FILE, file_name)
         else:
             cancel_details = result.cancellation_details
             logger.error("[Azure] textToVoice error, result={}, errordetails={}".format(result, cancel_details.error_details))
