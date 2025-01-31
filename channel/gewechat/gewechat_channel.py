@@ -147,15 +147,19 @@ class GeWeChatChannel(ChatChannel):
         elif reply.type == ReplyType.VIDEO:
             try:
                 video_path = reply.content
-                # 获取视频文件名
-                video_name = os.path.basename(video_path)
+
                 # 构造回调URL
                 callback_url = conf().get("gewechat_callback_url")
                 video_url = callback_url + "?file=" + video_path
                 
-                # 使用post_file API发送视频
-                self.client.post_file(self.app_id, receiver, video_url, video_name)
-                logger.info(f"[gewechat] Do send video to {receiver}: video_name={video_name}, video_url={video_url}")
+                # 对于缩略图，可以使用同一个视频URL
+                thumb_url = video_url
+                # 视频时长，如果获取不到可以设为0
+                video_duration = 0
+                
+                # 使用post_video API发送视频
+                self.client.post_video(self.app_id, receiver, video_url, thumb_url, video_duration)
+                logger.info(f"[gewechat] Do send video to {receiver}: video_url={video_url}")
             except Exception as e:
                 logger.error(f"[gewechat] send video failed: {e}")
         elif reply.type == ReplyType.IMAGE_URL:
