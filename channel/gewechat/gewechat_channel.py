@@ -144,6 +144,20 @@ class GeWeChatChannel(ChatChannel):
                 logger.info(f"[gewechat] Do send file to {receiver}: file_name={file_name}, file_url={file_url}")
             except Exception as e:
                 logger.error(f"[gewechat] send file failed: {e}")
+        elif reply.type == ReplyType.VIDEO:
+            try:
+                video_path = reply.content
+                # 获取视频文件名
+                video_name = os.path.basename(video_path)
+                # 构造回调URL
+                callback_url = conf().get("gewechat_callback_url")
+                video_url = callback_url + "?file=" + video_path
+                
+                # 使用post_file API发送视频
+                self.client.post_file(self.app_id, receiver, video_url, video_name)
+                logger.info(f"[gewechat] Do send video to {receiver}: video_name={video_name}, video_url={video_url}")
+            except Exception as e:
+                logger.error(f"[gewechat] send video failed: {e}")
         elif reply.type == ReplyType.IMAGE_URL:
             img_url = reply.content
             self.client.post_image(self.app_id, receiver, img_url)
