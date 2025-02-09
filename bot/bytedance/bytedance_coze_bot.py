@@ -230,12 +230,12 @@ class ByteDanceCozeBot(Bot):
             for block in pic_res.iter_content(1024):
                 size += len(block)
                 image_storage.write(block)
-            logger.debug(f"[WX] download image success, size={size}, img_url={url}")
+            logger.debug(f"[COZE] download image success, size={size}, img_url={url}")
             image_storage.seek(0)
             return image_storage
         except Exception as e:
             logger.error(f"Error downloading {url}: {e}")
-        return None
+            return None
 
     def _download_file(self, url):
         try:
