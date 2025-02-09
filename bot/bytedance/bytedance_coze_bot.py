@@ -55,11 +55,60 @@ class ByteDanceCozeBot(Bot):
             session_id = context["session_id"]
             session = self.sessions.session_query(query, user_id, session_id)
             logger.debug(f"[COZE] session={session} query={query}")
-            reply, err = self._reply(query, session, context)
-            if err != None:
+            
+            try:
+                chat_client = CozeClient(self.coze_api_key, self.coze_api_base)
+                additional_messages = self._get_upload_files(session)
+                messages = chat_client.create_chat_message(
+                    bot_id=self.coze_bot_id,
+                    query=query,
+                    additional_messages=additional_messages,
+                    session=session
+                )
+                
+                # 处理回复内容
+                reply = None
+                error = None
+                
+                if isinstance(messages, list):
+                    for message in messages:
+                        if isinstance(message, dict):
+                            # 如果有response_for_model字段
+                            if "response_for_model" in message:
+                                try:
+                                    import json
+                                    model_response = json.loads(message["response_for_model"])
+                                    if isinstance(model_response, list) and len(model_response) > 0:
+                                        reply = Reply(ReplyType.TEXT, model_response[0])
+                                    else:
+                                        reply = Reply(ReplyType.TEXT, str(model_response))
+                                    break
+                                except:
+                                    # 如果解析失败，使用原始response_for_model
+                                    reply = Reply(ReplyType.TEXT, message["response_for_model"])
+                                    break
+                            # 如果有content字段
+                            elif "content" in message:
+                                reply = Reply(ReplyType.TEXT, message["content"])
+                                break
+                    
+                    # 如果没有找到合适的回复内容
+                    if reply is None:
+                        reply = Reply(ReplyType.TEXT, str(messages))
+                else:
+                    # 如果messages不是列表，直接转为字符串
+                    reply = Reply(ReplyType.TEXT, str(messages))
+                    
+                if error:
+                    error_msg = conf().get("error_reply", "我暂时遇到了一些问题，请您稍后重试~")
+                    reply = Reply(ReplyType.TEXT, error_msg)
+                
+                return reply
+                
+            except Exception as e:
+                logger.error(f"[COZE] reply error: {e}")
                 error_msg = conf().get("error_reply", "我暂时遇到了一些问题，请您稍后重试~")
-                reply = Reply(ReplyType.TEXT, error_msg)
-            return reply
+                return Reply(ReplyType.TEXT, error_msg)
         else:
             reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
             return reply
