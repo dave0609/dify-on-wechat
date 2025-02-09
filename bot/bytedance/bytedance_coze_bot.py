@@ -15,6 +15,7 @@ from common import memory
 from common.utils import parse_markdown_text
 from common.tmp_dir import TmpDir
 from cozepy import MessageType,Message
+from bot.openai.open_ai_image import OpenAIImage
 
 class ByteDanceCozeBot(Bot):
     def __init__(self):
@@ -22,6 +23,8 @@ class ByteDanceCozeBot(Bot):
         self.sessions = CozeSessionManager(CozeSession)
         self.coze_api_base = conf().get("coze_api_base", "https://api.coze.cn/")
         self.coze_api_key = conf().get('coze_api_key', '')
+        self.image_creator = OpenAIImage()  # 初始化OpenAIImage
+        self.image_create_prefix = conf().get("image_create_prefix", ["画"])  # 从配置读取画图触发词
         if conf().get('coze_return_show_img', False):
             self.show_img_file = True
         else:
@@ -65,6 +68,21 @@ class ByteDanceCozeBot(Bot):
             return reply
 
     def _reply(self, query, session: CozeSession, context: Context):
+        # 检查是否是画图请求
+        query = query.strip()
+        for prefix in self.image_create_prefix:
+            if query.startswith(prefix):
+                # 提取画图提示词
+                prompt = query[len(prefix):].strip()
+                logger.info(f"[COZE] 检测到画图请求，触发词={prefix}，提示词={prompt}")
+                # 调用OpenAIImage创建图片
+                success, result = self.image_creator.create_img(prompt, context=context)
+                if success:
+                    return Reply(ReplyType.IMAGE, result), None
+                else:
+                    return Reply(ReplyType.TEXT, result), None
+
+        # 如果不是画图请求，使用原有的coze处理逻辑
         chat_client = CozeClient(self.coze_api_key, self.coze_api_base)
         additional_messages = self._get_upload_files(session)
         messages = chat_client.create_chat_message(
@@ -73,6 +91,7 @@ class ByteDanceCozeBot(Bot):
             additional_messages=additional_messages,
             session=session
         )
+        
         if self.show_img_file:
             return self.get_parsed_reply(messages, context)
         else:
@@ -224,17 +243,42 @@ class ByteDanceCozeBot(Bot):
         answer, err = self._get_completion_content(messages)
         if err is not None:
             return None, err
-        completion_tokens, total_tokens = self._calc_tokens(session.messages, answer)
-        Reply(ReplyType.TEXT, answer)
+            
+        # 过滤掉 JSON 格式的内容
+        def filter_json_content(text):
+            # 将输入按行分割
+            lines = text.split('\n')
+            # 过滤掉可能的 JSON 行
+            filtered_lines = []
+            for line in lines:
+                # 跳过以 { 开头或 } 结尾的行（可能是 JSON）
+                if line.strip().startswith('{') or line.strip().endswith('}'):
+                    continue
+                # 跳过包含 JSON 相关关键词的行
+                if any(keyword in line for keyword in ['"plugin_id"', '"arguments"', '"content_type"', '"card_type"', '"response_type"']):
+                    continue
+                filtered_lines.append(line)
+            
+            # 合并剩余的行并去掉空行
+            return '\n'.join(line for line in filtered_lines if line.strip())
+
+        # 对原始回复进行过滤
+        filtered_answer = filter_json_content(answer)
+        logger.info("[COZE] filtered_answer={}".format(filtered_answer))
+
+        completion_tokens, total_tokens = self._calc_tokens(session.messages, filtered_answer)
+        
         if err is not None:
             logger.error("[COZE] reply error={}".format(err))
             return Reply(ReplyType.ERROR, "我暂时遇到了一些问题，请您稍后重试~")
+            
         logger.debug(
             "[COZE] new_query={}, session_id={}, reply_cont={}, completion_tokens={}".format(
                 session.messages,
                 session.get_session_id(),
-                answer,
+                filtered_answer,
                 completion_tokens,
             )
         )
-        return Reply(ReplyType.TEXT, answer), None
+        
+        return Reply(ReplyType.TEXT, filtered_answer), None
