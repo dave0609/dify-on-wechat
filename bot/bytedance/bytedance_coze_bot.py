@@ -274,6 +274,7 @@ class ByteDanceCozeBot(Bot):
             return None, err
 
         # 过滤回复内容中的 JSON
+        logger.info("[COZE] answer={}".format(answer))
         filtered_answer = filter_json_content(answer)
         logger.info("[COZE] filtered_answer={}".format(filtered_answer))
 
