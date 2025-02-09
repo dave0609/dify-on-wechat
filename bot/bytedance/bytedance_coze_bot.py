@@ -12,7 +12,7 @@ from bridge.reply import Reply, ReplyType
 from common.log import logger
 from config import conf
 from common import memory
-from common.utils import parse_markdown_text
+from common.utils import parse_markdown_text, remove_markdown_symbol
 from common.tmp_dir import TmpDir
 from cozepy import MessageType,Message
 from bot.openai.open_ai_image import OpenAIImage
@@ -183,7 +183,7 @@ class ByteDanceCozeBot(Bot):
                     continue
                 except json.JSONDecodeError:
                     # 不是 JSON 格式，说明是普通文本，保存答案
-                    answer = message.content.strip()
+                    answer = remove_markdown_symbol(message.content.strip())
                     logger.info(f"[COZE] Found text answer: {answer}")
 
                     break
