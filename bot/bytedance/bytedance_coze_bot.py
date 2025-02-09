@@ -166,14 +166,19 @@ class ByteDanceCozeBot(Bot):
     #     return conf().get("coze_api_base", "https://api.coze.cn/open_api/v2")
 
     def _get_completion_content(self, messages: list):
-        answer = None
-        for message in messages:
-            if message.type == MessageType.ANSWER:
-                answer = message.content
-                break
-        if not answer:
-            return None, "[COZE] Error: empty answer"
-        return answer, None
+        # 只保留纯文本消息
+        try:
+            # 只保留纯文本消息
+            valid_messages = []
+            for msg in messages:
+                content = msg.content
+                # 只添加字符串类型的消息，跳过JSON/dict类型的消息
+                if isinstance(content, str):
+                    valid_messages.append(content)
+                    
+            return valid_messages[0] if valid_messages else "", None
+        except Exception as e:
+            return None, f"Error processing messages: {str(e)}"
 
     def _calc_tokens(self, messages, answer):
         # 简单统计token
