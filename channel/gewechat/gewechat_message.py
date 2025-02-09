@@ -333,10 +333,6 @@ class GeWeChatMessage(ChatMessage):
         if msg_type == 1:  # Text message
             self.ctype = ContextType.TEXT
             self.content = msg['Data']['Content']['string']
-        elif msg_type == 10000:  # Text message
-            self.ctype = ContextType.TEXT
-            self.content = msg['Data']['Content']['string']
-            logger.info(f"[msg_type == 10000] content: {self.content}")
         elif msg_type == 34:  # Voice message
             self.ctype = ContextType.VOICE
             if 'ImgBuf' in msg['Data'] and 'buffer' in msg['Data']['ImgBuf'] and msg['Data']['ImgBuf']['buffer']:
