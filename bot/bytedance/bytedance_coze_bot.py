@@ -240,12 +240,11 @@ class ByteDanceCozeBot(Bot):
         return None
 
     def get_text_reply(self, messages, session: CozeSession):
-        answer, err = self._get_completion_content(messages)
-        if err is not None:
-            return None, err
-            
-        # 过滤掉 JSON 格式的内容
+        # 首先过滤 messages 中的 JSON 内容
         def filter_json_content(text):
+            if not isinstance(text, str):
+                return text
+                
             # 将输入按行分割
             lines = text.split('\n')
             # 过滤掉可能的 JSON 行
@@ -262,7 +261,19 @@ class ByteDanceCozeBot(Bot):
             # 合并剩余的行并去掉空行
             return '\n'.join(line for line in filtered_lines if line.strip())
 
-        # 对原始回复进行过滤
+        # 过滤 messages 中的每条消息
+        filtered_messages = []
+        for msg in messages:
+            if isinstance(msg, dict) and "content" in msg:
+                msg["content"] = filter_json_content(msg["content"])
+            filtered_messages.append(msg)
+
+        # 使用过滤后的消息获取回复
+        answer, err = self._get_completion_content(filtered_messages)
+        if err is not None:
+            return None, err
+
+        # 过滤回复内容中的 JSON
         filtered_answer = filter_json_content(answer)
         logger.info("[COZE] filtered_answer={}".format(filtered_answer))
 
