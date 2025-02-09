@@ -91,6 +91,14 @@ class ByteDanceCozeBot(Bot):
             additional_messages=additional_messages,
             session=session
         )
+        # 添加日志来查看接收到的所有消息
+        for i, msg in enumerate(messages):
+            logger.info(f"[COZE] Received message {i+1}: type={msg.type}, content={msg.content}")
+        
+        if self.show_img_file:
+            return self.get_parsed_reply(messages, context)
+        else:
+            return self.get_text_reply(messages, session)
         
         if self.show_img_file:
             return self.get_parsed_reply(messages, context)
