@@ -78,7 +78,7 @@ class ByteDanceCozeBot(Bot):
                 # 调用OpenAIImage创建图片
                 success, result = self.image_creator.create_img(prompt, context=context)
                 if success:
-                    return Reply(ReplyType.IMAGE, result), None
+                    return Reply(ReplyType.IMAGE_URL, result), None
                 else:
                     return Reply(ReplyType.TEXT, result), None
 
