@@ -91,10 +91,7 @@ class ByteDanceCozeBot(Bot):
             additional_messages=additional_messages,
             session=session
         )
-        # 添加日志来查看接收到的所有消息
-        for i, msg in enumerate(messages):
-            logger.info(f"[COZE] Received message {i+1}: type={msg.type}, content={msg.content}")
-        
+
         if self.show_img_file:
             return self.get_parsed_reply(messages, context)
         else:
@@ -174,19 +171,25 @@ class ByteDanceCozeBot(Bot):
     #     return conf().get("coze_api_base", "https://api.coze.cn/open_api/v2")
 
     def _get_completion_content(self, messages: list):
-        # 只保留纯文本消息
-        try:
-            # 只保留纯文本消息
-            valid_messages = []
-            for msg in messages:
-                content = msg.content
-                # 只添加字符串类型的消息，跳过JSON/dict类型的消息
-                if isinstance(content, str):
-                    valid_messages.append(content)
-                    
-            return valid_messages[0] if valid_messages else "", None
-        except Exception as e:
-            return None, f"Error processing messages: {str(e)}"
+        answer = None
+        for message in messages:
+            if message.type == MessageType.ANSWER:
+                try:
+                    # 尝试解析为 JSON，如果成功则说明是 JSON 格式，跳过这个消息
+                    import json
+                    json.loads(message.content)
+                    logger.info(f"[COZE] Skipping JSON format message: {message.content}")
+
+                    continue
+                except json.JSONDecodeError:
+                    # 不是 JSON 格式，说明是普通文本，保存答案
+                    answer = message.content
+                    logger.info(f"[COZE] Found text answer: {answer}")
+
+                    break
+        if not answer:
+            return None, "[COZE] Error: empty answer"
+        return answer, None
 
     def _calc_tokens(self, messages, answer):
         # 简单统计token
@@ -253,57 +256,20 @@ class ByteDanceCozeBot(Bot):
         return None
 
     def get_text_reply(self, messages, session: CozeSession):
-        # 首先过滤 messages 中的 JSON 内容
-        def filter_json_content(text):
-            if not isinstance(text, str):
-                return text
-                
-            # 将输入按行分割
-            lines = text.split('\n')
-            # 过滤掉可能的 JSON 行
-            filtered_lines = []
-            for line in lines:
-                # 跳过以 { 开头或 } 结尾的行（可能是 JSON）
-                if line.strip().startswith('{') or line.strip().endswith('}'):
-                    continue
-                # 跳过包含 JSON 相关关键词的行
-                if any(keyword in line for keyword in ['"plugin_id"', '"arguments"', '"content_type"', '"card_type"', '"response_type"']):
-                    continue
-                filtered_lines.append(line)
-            
-            # 合并剩余的行并去掉空行
-            return '\n'.join(line for line in filtered_lines if line.strip())
-
-        # 过滤 messages 中的每条消息
-        filtered_messages = []
-        for msg in messages:
-            if isinstance(msg, dict) and "content" in msg:
-                msg["content"] = filter_json_content(msg["content"])
-            filtered_messages.append(msg)
-
-        # 使用过滤后的消息获取回复
-        answer, err = self._get_completion_content(filtered_messages)
+        answer, err = self._get_completion_content(messages)
         if err is not None:
             return None, err
-
-        # 过滤回复内容中的 JSON
-        logger.info("[COZE] answer={}".format(answer))
-        filtered_answer = filter_json_content(answer)
-        logger.info("[COZE] filtered_answer={}".format(filtered_answer))
-
-        completion_tokens, total_tokens = self._calc_tokens(session.messages, filtered_answer)
-        
+        completion_tokens, total_tokens = self._calc_tokens(session.messages, answer)
+        Reply(ReplyType.TEXT, answer)
         if err is not None:
             logger.error("[COZE] reply error={}".format(err))
             return Reply(ReplyType.ERROR, "我暂时遇到了一些问题，请您稍后重试~")
-            
         logger.debug(
             "[COZE] new_query={}, session_id={}, reply_cont={}, completion_tokens={}".format(
                 session.messages,
                 session.get_session_id(),
-                filtered_answer,
+                answer,
                 completion_tokens,
             )
         )
-        
-        return Reply(ReplyType.TEXT, filtered_answer), None
+        return Reply(ReplyType.TEXT, answer), None
