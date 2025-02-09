@@ -324,22 +324,13 @@ class GeWeChatMessage(ChatMessage):
         self.to_user_id = msg['Data']['ToUserName']['string']
         self.other_user_id = self.from_user_id
 
-        # 检查是否是公众号等非用户账号的消息
-        if self._is_non_user_message(msg['Data'].get('MsgSource', ''), self.from_user_id):
-            self.ctype = ContextType.NON_USER_MSG
-            self.content = msg['Data']['Content']['string']
-            logger.debug(f"[gewechat] detected non-user message from {self.from_user_id}: {self.content}")
-            return
-        
-        if msg_type == 10000:  # 特殊格式的系统消息(搜索类等)
+        if msg_type == 10000:  # 特殊系统消息
             self.ctype = ContextType.TEXT
-            content = msg['Data']['Content']['string']
+            content = msg['Data'].get('Content', {}).get('string', '')
             try:
                 content_json = json.loads(content)
                 if 'response_for_model' in content_json:
-                    # 提取response_for_model字段并解析JSON字符串
                     response_list = json.loads(content_json['response_for_model'])
-                    # 取第一个结果作为回复内容
                     if response_list and len(response_list) > 0:
                         self.content = response_list[0]
                     else:
@@ -349,7 +340,15 @@ class GeWeChatMessage(ChatMessage):
             except json.JSONDecodeError:
                 logger.warning(f"[gewechat] Failed to parse JSON content for message type 10000")
                 self.content = content
+            return  # 处理完10000类型消息后直接返回
 
+        # 检查是否是公众号等非用户账号的消息
+        if self._is_non_user_message(msg['Data'].get('MsgSource', ''), self.from_user_id):
+            self.ctype = ContextType.NON_USER_MSG
+            self.content = msg['Data']['Content']['string']
+            logger.debug(f"[gewechat] detected non-user message from {self.from_user_id}: {self.content}")
+            return
+        
         if msg_type == 1:  # Text message
             self.ctype = ContextType.TEXT
             self.content = msg['Data']['Content']['string']
