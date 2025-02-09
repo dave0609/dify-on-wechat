@@ -183,7 +183,7 @@ class ByteDanceCozeBot(Bot):
                     continue
                 except json.JSONDecodeError:
                     # 不是 JSON 格式，说明是普通文本，保存答案
-                    answer = message.content
+                    answer = message.content.strip()
                     logger.info(f"[COZE] Found text answer: {answer}")
 
                     break
