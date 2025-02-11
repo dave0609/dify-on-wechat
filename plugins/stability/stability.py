@@ -221,7 +221,6 @@ class stability(Plugin):
                 if match: ##   匹配上了recraft的指令
                     recraft_prompt = content[len(self.recraft_prefix):].strip()
                     logger.info(f"recraft_prompt = : {recraft_prompt}")
-                    recraft_prompt = self.translate_to_english(recraft_prompt)
                     self.call_recraft_service(recraft_prompt, e_context)
                 else:
                     tip = f"💡欢迎使用Recraft V3绘图，指令格式为:\n\n{self.recraft_prefix}+ 空格 + 主题(英文更佳)\n例如：{self.recraft_prefix} a smiling cat"
@@ -770,7 +769,7 @@ class stability(Plugin):
     def call_recraft_service(self, recraft_prompt,e_context):
         logger.info(f"calling recraft service")
 
-        tip = f'欢迎使用Recraft V3.\n💡您的提示词已经自动翻译成英文，图片正在生成中，请耐心等待1-2分钟。\n当前使用的提示词为：\n{recraft_prompt}'
+        tip = f'欢迎使用Recraft V3.\n💡图片正在生成中，请耐心等待1-2分钟。\n当前使用的提示词为：\n{recraft_prompt}'
         self.send_reply(tip, e_context)
 
         response = requests.post(
