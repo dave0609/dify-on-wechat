@@ -47,7 +47,11 @@ class OpenAIImage(object):
                 return False, "画图出现问题，请休息一下再问我吧"
         except Exception as e:
             logger.exception(e)
-            return False, "画图出现问题，请休息一下再问我吧"
+            error_msg = str(e)
+            if "Your request was rejected as a result of our safety system" in error_msg:
+                return False, "画图出现问题，关键字没有通过安全审核"
+            else:
+                return False, "画图出现问题，请休息一下再问我吧"
 
     def send_revised_prompt(self, context, revised_prompt, query):
         if not context or not revised_prompt:
