@@ -455,12 +455,6 @@ class GeWeChatMessage(ChatMessage):
                 }
             }
             """
-            logger.info(f"[gewechat] Group message detected:")
-            logger.info(f"[gewechat] Raw message content: {self.msg.get('Data', {}).get('Content', {}).get('string', '')}")
-            logger.info(f"[gewechat] From user: {self.from_user_id}")
-            logger.info(f"[gewechat] To user: {self.to_user_id}")
-            logger.info(f"[gewechat] Message type: {msg_type}")
-            logger.info(f"[gewechat] Current content: {self.content}")
             
             # 获取实际发送者wxid
             self.actual_user_id = self.msg.get('Data', {}).get('Content', {}).get('string', '').split(':', 1)[0]  # 实际发送者ID
@@ -547,7 +541,7 @@ class GeWeChatMessage(ChatMessage):
                 
                 # 4. 清理多余空格
                 self.content = self.content.strip()
-                logger.info(f"[gewechat] 清理后content: {self.content}")
+                logger.debug(f"[gewechat] 清理后content: {self.content}")
             else:
                 logger.warning(f"[gewechat] Content is None for group message with msg_id: {self.msg_id}")
                 self.content = ""  # 设置默认值
