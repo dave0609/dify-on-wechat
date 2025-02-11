@@ -104,7 +104,7 @@ class ChatChannel(Channel):
                 match_contain = check_contain(content, conf().get("group_chat_keyword"))
                 flag = False
                 if context["msg"].to_user_id != context["msg"].actual_user_id:
-                    logger.info("[chat_channel] to_user_id != actual_user_id 条件成立")
+                    logger.debug("[chat_channel] to_user_id != actual_user_id 条件成立")
 
                     if match_prefix is not None or match_contain is not None:
                         flag = True
@@ -133,7 +133,7 @@ class ChatChannel(Channel):
                             subtract_res = re.sub(pattern, r"", content)
                         content = subtract_res
                 else:
-                    logger.info("[chat_channel] to_user_id == actual_user_id 条件不成立，消息被过滤")
+                    logger.debug("[chat_channel] to_user_id == actual_user_id 条件不成立，消息被过滤")
                 
                 if not flag:
                     if context["origin_ctype"] == ContextType.VOICE:
