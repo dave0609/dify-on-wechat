@@ -105,16 +105,13 @@ class GeWeChatChannel(ChatChannel):
         app = web.application(urls, globals(), autoreload=False)
         web.httpserver.runsimple(app.wsgifunc(), ("0.0.0.0", port))
 
-    def remove_markdown(text: str) -> str:
+    def remove_markdown(self, text: str) -> str:
         """
-        清除 Markdown 格式的辅助函数
+        清除 Markdown 格式的辅助函数，去除标题、粗体、斜体等符号
         """
-        # 移除行首的 Markdown 标题符号（如：##）
         text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
-        # 移除粗体、斜体的 **、* 号
         text = re.sub(r'\*\*', '', text)
         text = re.sub(r'\*', '', text)
-        # 如果需要可以扩展更多 Markdown 格式的移除
         return text
 
     def send(self, reply: Reply, context: Context):
