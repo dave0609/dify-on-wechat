@@ -15,6 +15,7 @@ from config import conf, save_config
 from lib.gewechat import GewechatClient
 from voice.audio_convert import mp3_to_silk
 import uuid
+import re
 
 MAX_UTF8_LEN = 2048
 
@@ -104,11 +105,24 @@ class GeWeChatChannel(ChatChannel):
         app = web.application(urls, globals(), autoreload=False)
         web.httpserver.runsimple(app.wsgifunc(), ("0.0.0.0", port))
 
+    def remove_markdown(text: str) -> str:
+        """
+        清除 Markdown 格式的辅助函数
+        """
+        # 移除行首的 Markdown 标题符号（如：##）
+        text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
+        # 移除粗体、斜体的 **、* 号
+        text = re.sub(r'\*\*', '', text)
+        text = re.sub(r'\*', '', text)
+        # 如果需要可以扩展更多 Markdown 格式的移除
+        return text
+
     def send(self, reply: Reply, context: Context):
         receiver = context["receiver"]
         gewechat_message = context.get("msg")
         if reply.type in [ReplyType.TEXT, ReplyType.ERROR, ReplyType.INFO]:
-            reply_text = reply.content
+            # 清除 Markdown 格式后再发送
+            reply_text = remove_markdown(reply.content)
             ats = ""
             if gewechat_message and gewechat_message.is_group:
                 ats = gewechat_message.actual_user_id
