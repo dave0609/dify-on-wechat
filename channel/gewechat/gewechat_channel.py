@@ -107,12 +107,9 @@ class GeWeChatChannel(ChatChannel):
 
     def remove_markdown(self, text: str) -> str:
         """
-        清除 Markdown 格式的辅助函数，去除标题、粗体、斜体等符号
+        移除文本中所有的 '#' 和 '*' 符号
         """
-        text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
-        text = re.sub(r'\*\*', '', text)
-        text = re.sub(r'\*', '', text)
-        return text
+        return re.sub(r'[#\*]', '', text)
 
     def send(self, reply: Reply, context: Context):
         receiver = context["receiver"]
