@@ -116,7 +116,7 @@ class GeWeChatChannel(ChatChannel):
         gewechat_message = context.get("msg")
         if reply.type in [ReplyType.TEXT, ReplyType.ERROR, ReplyType.INFO]:
             # 清除 Markdown 格式后再发送
-            reply_text = self.remove_markdown(reply.content)
+            reply_text = reply.content
             ats = ""
             if gewechat_message and gewechat_message.is_group:
                 ats = gewechat_message.actual_user_id
