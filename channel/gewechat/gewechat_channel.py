@@ -109,8 +109,12 @@ class GeWeChatChannel(ChatChannel):
         """
         移除文本中所有的 '#' 和 '*' 符号以及特定的HTML标签，但保留<think>标签
         """
-        # 移除特定的HTML标签，如<details>等，但保留<think>标签
+        # 将<details>标签转换为<think>标签
+        text = re.sub(r'<details.*?>(.*?)<summary>.*?</summary>(.*?)</details>', r'<think>\1\2</think>', text, flags=re.DOTALL)
+        
+        # 移除其他HTML标签，但保留<think>标签
         text = re.sub(r'<(?!/?think\b)[^>]*>', '', text)
+        
         # 再移除Markdown标记
         return re.sub(r'[#\*]', '', text)
 
