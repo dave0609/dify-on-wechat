@@ -119,7 +119,10 @@ class GeWeChatChannel(ChatChannel):
         text = re.sub(r'<(?!/?think\b)[^>]*>', '', text)
         
         # 再移除Markdown标记
-        return re.sub(r'[#\*]', '', text)
+        text = re.sub(r'[#\*]', '', text)
+        
+        # 确保不会有多余的空行在开头
+        return text.strip()
 
     def send(self, reply: Reply, context: Context):
         receiver = context["receiver"]
