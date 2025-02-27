@@ -117,12 +117,13 @@ class ChatGPTBot(Bot, OpenAIImage, OpenAIVision):
             reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
             return reply
 
-    def reply_text(self, session_id: str, session: ChatGPTSession, api_key=None, args=None, retry_count=0) -> dict:
+    def reply_text(self, session_id: str, session: ChatGPTSession, api_key=None, args=None, retry_count=0, is_failover=False) -> dict:
         """
         call openai's ChatCompletion to get the answer
         :param session: a conversation session
         :param session_id: session id
         :param retry_count: retry count
+        :param is_failover: whether this is a failover attempt
         :return: {}
         """
         try:
@@ -207,6 +208,11 @@ class ChatGPTBot(Bot, OpenAIImage, OpenAIVision):
                 result["content"] = "我连接不到你的网络"
                 if need_retry:
                     time.sleep(5)
+            elif isinstance(e, openai.error.InvalidRequestError) and "could not find json block in the output" in str(e):
+                logger.warn("[CHATGPT] InvalidRequestError (JSON block): {}".format(e))
+                result["content"] = "我遇到了一点小问题，请再问我一次"
+                if need_retry:
+                    time.sleep(3)
             else:
                 logger.exception("[CHATGPT] Exception: {}".format(e))
                 need_retry = False
@@ -215,6 +221,17 @@ class ChatGPTBot(Bot, OpenAIImage, OpenAIVision):
             if need_retry:
                 logger.warn("[CHATGPT] 第{}次重试".format(retry_count + 1))
                 return self.reply_text(session_id, session, api_key, args, retry_count + 1)
+            elif not is_failover and conf().get("failover_model"):
+                # 尝试使用备用模型
+                failover_model = conf().get("failover_model")
+                logger.warn(f"[CHATGPT] 使用备用模型 {failover_model} 重试")
+                
+                # 创建新的参数，使用备用模型
+                failover_args = self.args.copy() if args is None else args.copy()
+                failover_args["model"] = failover_model
+                
+                # 使用备用模型重试
+                return self.reply_text(session_id, session, api_key, failover_args, 0, True)
             else:
                 return result
 
