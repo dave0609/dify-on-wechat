@@ -19,6 +19,7 @@ from common import const, memory
 from common.utils import parse_markdown_text, print_red
 from common.tmp_dir import TmpDir
 from config import conf
+from bot.openai.open_ai_image import OpenAIImage
 
 UNKNOWN_ERROR_MSG = "我暂时遇到了一些问题，请您稍后重试~"
 
@@ -26,6 +27,8 @@ class DifyBot(Bot):
     def __init__(self):
         super().__init__()
         self.sessions = DifySessionManager(DifySession, model=conf().get("model", const.DIFY))
+        self.image_creator = OpenAIImage()  # 初始化OpenAIImage
+        self.image_create_prefix = conf().get("image_create_prefix", ["画"])  # 从配置读取画图触发词
 
     def reply(self, query, context: Context=None):
         # acquire reply content
@@ -95,6 +98,20 @@ class DifyBot(Bot):
         return context.get(key, conf().get(key, default))
 
     def _reply(self, query: str, session: DifySession, context: Context):
+
+        query = query.strip()
+        for prefix in self.image_create_prefix:
+            if query.startswith(prefix):
+                # 提取画图提示词
+                prompt = query[len(prefix):].strip()
+                logger.info(f"[COZE] 检测到画图请求，触发词={prefix}，提示词={prompt}")
+                # 调用OpenAIImage创建图片
+                success, result = self.image_creator.create_img(prompt, context=context)
+                if success:
+                    return Reply(ReplyType.IMAGE_URL, result), None
+                else:
+                    return Reply(ReplyType.TEXT, result), None
+                
         try:
             session.count_user_message() # 限制一个conversation中消息数，防止conversation过长
             dify_app_type = self._get_dify_conf(context, "dify_app_type", 'chatbot')
