@@ -207,6 +207,11 @@ class ChatGPTBot(Bot, OpenAIImage, OpenAIVision):
                 result["content"] = "我连接不到你的网络"
                 if need_retry:
                     time.sleep(5)
+            elif isinstance(e, openai.error.InvalidRequestError) and "could not find json block in the output" in str(e):
+                logger.warn("[CHATGPT] InvalidRequestError (JSON block): {}".format(e))
+                result["content"] = "我遇到了一点小问题，请再问我一次"
+                if need_retry:
+                    time.sleep(3)
             else:
                 logger.exception("[CHATGPT] Exception: {}".format(e))
                 need_retry = False
