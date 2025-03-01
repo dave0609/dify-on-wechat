@@ -215,14 +215,6 @@ class sunoplayer(Plugin):
                         file_format='mp3'
                     )
                     
-                    # Wait for download to complete
-                    max_wait = 30  # Maximum wait time in seconds
-                    wait_interval = 1  # Check every second
-                    for _ in range(max_wait):
-                        if audio_path and os.path.exists(audio_path) and os.path.getsize(audio_path) > 100*1024:
-                            break
-                        time.sleep(wait_interval)
-                    
                     # Send lyrics if available
                     if lyrics_path and os.path.exists(lyrics_path):
                         msg = self.print_file_contents(lyrics_path)
@@ -234,14 +226,8 @@ class sunoplayer(Plugin):
                         output_path=os.path.join(output_dir, f"{audio_id}.mp3"),
                         file_format='mp3'
                     )
-                    
-                    # Wait for download to complete
-                    max_wait = 30  # Maximum wait time in seconds
-                    wait_interval = 1  # Check every second
-                    for _ in range(max_wait):
-                        if audio_path and os.path.exists(audio_path) and os.path.getsize(audio_path) > 100*1024:
-                            break
-                        time.sleep(wait_interval)
+                
+                # 在suno.py中已经确保文件完全下载完成后才返回
                 
                 if not audio_path or not self.is_valid_file(audio_path):
                     logger.error(f"Failed to download or invalid audio file: {audio_id}")

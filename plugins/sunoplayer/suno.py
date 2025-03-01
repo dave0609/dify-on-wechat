@@ -304,12 +304,27 @@ def download_audio(audio_url, output_path=None, file_format='mp3'):
         response = session.get(audio_url, stream=True, timeout=60)
         response.raise_for_status()
         
+        # 检查内容类型和长度
+        content_type = response.headers.get('Content-Type', '')
+        content_length = response.headers.get('Content-Length', '0')
+        logger.info(f"响应内容类型: {content_type}, 内容长度: {content_length}")
+        
         # 保存文件
+        total_size = 0
         with open(output_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:  # 过滤掉保持连接alive的空块
+                    f.write(chunk)
+                    total_size += len(chunk)
         
-        logger.info(f"音频已保存至: {output_path}")
+        # 验证文件大小
+        file_size = os.path.getsize(output_path)
+        logger.info(f"音频已保存至: {output_path}, 文件大小: {file_size} 字节, 下载大小: {total_size} 字节")
+        
+        # 如果文件太小，可能是下载失败
+        if file_size < 1024:  # 小于1KB
+            logger.warning(f"警告: 下载的文件太小 ({file_size} 字节), 可能下载不完整")
+            
         return output_path
     
     except requests.exceptions.RequestException as e:
