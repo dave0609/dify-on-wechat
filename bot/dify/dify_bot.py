@@ -152,85 +152,24 @@ class DifyBot(Bot):
             friendly_error_msg = self._handle_error_response(response.text, response.status_code)
             return None, friendly_error_msg
 
-        # response:
-        # {
-        #     "event": "message",
-        #     "message_id": "9da23599-e713-473b-982c-4328d4f5c78a",
-        #     "conversation_id": "45701982-8118-4bc5-8e9b-64562b4555f2",
-        #     "mode": "chat",
-        #     "answer": "xxx",
-        #     "metadata": {
-        #         "usage": {
-        #         },
-        #         "retriever_resources": []
-        #     },
-        #     "created_at": 1705407629
-        # }
         rsp_data = response.json()
         logger.debug("[DIFY] usage {}".format(rsp_data.get('metadata', {}).get('usage', 0)))
 
         answer = rsp_data['answer']
-        parsed_content = parse_markdown_text(answer)
-
-        # {"answer": "![image](/files/tools/dbf9cd7c-2110-4383-9ba8-50d9fd1a4815.png?timestamp=1713970391&nonce=0d5badf2e39466042113a4ba9fd9bf83&sign=OVmdCxCEuEYwc9add3YNFFdUpn4VdFKgl84Cg54iLnU=)"}
+        
+        # 直接使用answer作为回复内容，不进行markdown解析
         at_prefix = ""
-        channel = context.get("channel")
         is_group = context.get("isgroup", False)
         if is_group:
             at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
-        for item in parsed_content[:-1]:
-            reply = None
-            if item['type'] == 'text':
-                content = at_prefix + item['content']
-                reply = Reply(ReplyType.TEXT, content)
-            elif item['type'] == 'image':
-                image_url = self._fill_file_base_url(item['content'])
-                image = self._download_image(image_url)
-                if image:
-                    reply = Reply(ReplyType.IMAGE, image)
-                else:
-                    reply = Reply(ReplyType.TEXT, f"图片链接：{image_url}")
-            elif item['type'] == 'file':
-                file_url = self._fill_file_base_url(item['content'])
-                file_path = self._download_file(file_url)
-                if file_path:
-                    reply = Reply(ReplyType.FILE, file_path)
-                else:
-                    reply = Reply(ReplyType.TEXT, f"文件链接：{file_url}")
-            logger.debug(f"[DIFY] reply={reply}")
-            if reply and channel:
-                channel.send(reply, context)
-        # parsed_content 没有数据时，直接不回复
-        if not parsed_content:
-            return None, None
-        final_item = parsed_content[-1]
-        final_reply = None
-        if final_item['type'] == 'text':
-            content = final_item['content']
-            if is_group:
-                at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
-                content = at_prefix + content
-            final_reply = Reply(ReplyType.TEXT, final_item['content'])
-        elif final_item['type'] == 'image':
-            image_url = self._fill_file_base_url(final_item['content'])
-            image = self._download_image(image_url)
-            if image:
-                final_reply = Reply(ReplyType.IMAGE, image)
-            else:
-                final_reply = Reply(ReplyType.TEXT, f"图片链接：{image_url}")
-        elif final_item['type'] == 'file':
-            file_url = self._fill_file_base_url(final_item['content'])
-            file_path = self._download_file(file_url)
-            if file_path:
-                final_reply = Reply(ReplyType.FILE, file_path)
-            else:
-                final_reply = Reply(ReplyType.TEXT, f"文件链接：{file_url}")
-
+        
+        reply = Reply(ReplyType.TEXT, at_prefix + answer)
+        
         # 设置dify conversation_id, 依靠dify管理上下文
         if session.get_conversation_id() == '':
             session.set_conversation_id(rsp_data['conversation_id'])
 
-        return final_reply, None
+        return reply, None
 
     def _download_file(self, url):
         try:
