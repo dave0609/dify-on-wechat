@@ -1,1 +1,1 @@
-from .suno import *
+from .sunoplayer import *
