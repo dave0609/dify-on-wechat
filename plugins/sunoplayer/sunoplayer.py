@@ -12,7 +12,7 @@ import os
 import uuid
 from glob import glob
 from .suno import (generate_audio_by_prompt, get_audio_information, 
-                  get_aligned_lyrics, download_audio, get_quota_information)
+                  download_audio_with_lyrics, download_audio, get_quota_information)
 import time
 
 @plugins.register(
@@ -206,27 +206,30 @@ class sunoplayer(Plugin):
                 audio_id = item['id']
                 audio_url = item['audio_url']
                 
-                # Download audio
-                audio_path = download_audio(
-                    audio_url,
-                    output_path=os.path.join(output_dir, f"{audio_id}.mp3"),
-                    file_format='mp3'
-                )
+                # Use download_audio_with_lyrics instead of separate functions
+                if not instrumental and self.show_lyc:
+                    audio_path, lyrics_path = download_audio_with_lyrics(
+                        audio_id,
+                        audio_url,
+                        output_dir=output_dir,
+                        file_format='mp3'
+                    )
+                    
+                    # Send lyrics if available
+                    if lyrics_path and os.path.exists(lyrics_path):
+                        msg = self.print_file_contents(lyrics_path)
+                        self.send_reply(msg, e_context)
+                else:
+                    # Just download audio if no lyrics needed
+                    audio_path = download_audio(
+                        audio_url,
+                        output_path=os.path.join(output_dir, f"{audio_id}.mp3"),
+                        file_format='mp3'
+                    )
                 
                 if not audio_path or not self.is_valid_file(audio_path):
                     logger.error(f"Failed to download or invalid audio file: {audio_id}")
                     continue
-                
-                # Get and save lyrics if not instrumental
-                if not instrumental and self.show_lyc:
-                    lyrics_data = get_aligned_lyrics(audio_id)
-                    if "error" not in lyrics_data:
-                        lrc_file_path = os.path.join(output_dir, f"{audio_id}.lrc")
-                        with open(lrc_file_path, 'w', encoding='utf-8') as f:
-                            f.write(str(lyrics_data))
-                        
-                        msg = self.print_file_contents(lrc_file_path)
-                        self.send_reply(msg, e_context)
                 
                 # Rename and send the audio file
                 newfilepath = self.rename_file(audio_path, prompt, file_counter)
