@@ -212,7 +212,7 @@ class sunoplayer(Plugin):
                         audio_id,
                         audio_url,
                         output_dir=output_dir,
-                        file_format='mp3'
+                        file_format='wav'  # 改为wav格式
                     )
                     
                     # Send lyrics if available
@@ -224,7 +224,7 @@ class sunoplayer(Plugin):
                     audio_path = download_audio(
                         audio_url,
                         output_path=os.path.join(output_dir, f"{audio_id}.mp3"),
-                        file_format='mp3'
+                        file_format='wav'  # 改为wav格式
                     )
                 
                 # 在suno.py中已经确保文件完全下载完成后才返回
