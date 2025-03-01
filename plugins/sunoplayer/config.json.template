@@ -1,0 +1,6 @@
+{
+  "suno_url":"https://suno-api-eta.vercel.app",
+  "suno_prefix":"写歌",
+  "instrumental_prefix":"纯音乐",
+  "show_lyc":true
+}
