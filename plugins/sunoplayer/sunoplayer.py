@@ -125,7 +125,7 @@ class sunoplayer(Plugin):
             e_context.action = EventAction.BREAK_PASS
             return
         
-        quota_left = quota_info.get("limit_left", 0)
+        quota_left = quota_info.get("credits_left", 0)
         logger.info(f"credit left = {quota_left}")
         if quota_left < 1:
             logger.info("No enough credit left.")
