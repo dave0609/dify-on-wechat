@@ -191,70 +191,92 @@ def save_lyrics_to_txt(lyrics_data, output_path):
             return None
         
         # 提取歌词文本
-        raw_lyrics = ""
+        processed_lyrics = ""
+        current_line = ""
         
-        # 处理不同格式的歌词数据
+        # 处理列表格式的歌词数据（英文歌词通常是这种格式）
         if isinstance(lyrics_data, list):
-            # 处理列表格式的歌词数据
             for item in lyrics_data:
                 if "word" in item:
-                    word = item["word"].strip()
-                    if word:
-                        raw_lyrics += word + "\n"
+                    word = item["word"]
+                    
+                    # 检查是否包含章节标记 [Verse], [Chorus] 等
+                    if word.startswith("[") and "]" in word:
+                        section_end = word.find("]") + 1
+                        section = word[:section_end]
+                        
+                        # 如果当前行不为空，先添加当前行
+                        if current_line:
+                            processed_lyrics += current_line.strip() + "\n"
+                            current_line = ""
+                        
+                        # 添加章节标记为单独的一行
+                        processed_lyrics += section + "\n"
+                        
+                        # 处理章节标记后的剩余部分
+                        remaining = word[section_end:].strip()
+                        if remaining:
+                            if "\n" in remaining:
+                                parts = remaining.split("\n")
+                                for i, part in enumerate(parts):
+                                    if part:
+                                        current_line += part + " "
+                                    if i < len(parts) - 1:  # 不是最后一部分
+                                        processed_lyrics += current_line.strip() + "\n"
+                                        current_line = ""
+                            else:
+                                current_line += remaining + " "
+                    else:
+                        # 检查是否包含换行符
+                        if "\n" in word:
+                            parts = word.split("\n")
+                            for i, part in enumerate(parts):
+                                if part:
+                                    current_line += part + " "
+                                if i < len(parts) - 1:  # 不是最后一部分
+                                    processed_lyrics += current_line.strip() + "\n"
+                                    current_line = ""
+                        else:
+                            current_line += word + " "
+            
+            # 添加最后一行
+            if current_line:
+                processed_lyrics += current_line.strip() + "\n"
+        
+        # 处理字典格式的歌词数据
         elif isinstance(lyrics_data, dict):
-            # 处理字典格式的歌词数据
+            # 现有的字典处理逻辑保持不变
             if "words" in lyrics_data:
                 # 如果是单词级别的数据
-                current_line = ""
                 for word_data in lyrics_data["words"]:
                     if "word" in word_data:
                         word = word_data["word"].strip()
-                        current_line += word + " "
                         if "\n" in word:
-                            raw_lyrics += current_line.strip() + "\n"
-                            current_line = ""
+                            parts = word.split("\n")
+                            for i, part in enumerate(parts):
+                                if part:
+                                    current_line += part + " "
+                                if i < len(parts) - 1:  # 不是最后一部分
+                                    processed_lyrics += current_line.strip() + "\n"
+                                    current_line = ""
+                        else:
+                            current_line += word + " "
+                
+                # 添加最后一行
                 if current_line:
-                    raw_lyrics += current_line.strip() + "\n"
+                    processed_lyrics += current_line.strip() + "\n"
             elif "lines" in lyrics_data:
                 # 如果是行级别的数据
                 for line_data in lyrics_data["lines"]:
                     if "text" in line_data:
                         text = line_data["text"].strip()
-                        raw_lyrics += text + "\n"
+                        processed_lyrics += text + "\n"
             else:
                 # 如果只有纯文本歌词
-                raw_lyrics = lyrics_data.get("lyrics", "")
+                processed_lyrics = lyrics_data.get("lyrics", "")
         else:
             logger.warning("未知的歌词数据格式")
             return None
-        
-        # 使用正则表达式修复分割的章节标记
-        import re
-        
-        # 首先处理可能跨行的章节标记
-        # 例如: "[Verse" 在一行，"2]" 在下一行
-        pattern = r'\[(.*?)\]\s*\n\s*\[(.*?)\]'
-        
-        # 定义替换函数，用于处理复杂的替换逻辑
-        def fix_section_marker(match):
-            first_part = match.group(1)
-            second_part = match.group(2)
-            
-            # 检查第二部分是否只是数字加右括号
-            if re.match(r'^\d+\]$', second_part):
-                # 如果是，则合并为一个完整的章节标记
-                return f"[{first_part} {second_part[:-1]}]"
-            else:
-                # 否则保持原样
-                return f"[{first_part}]\n[{second_part}]"
-        
-        # 应用正则表达式替换
-        processed_lyrics = re.sub(pattern, fix_section_marker, raw_lyrics)
-        
-        # 再次检查是否有未闭合的章节标记
-        # 例如: "[Verse" 在一行末尾，"2]" 在下一行开头
-        pattern2 = r'\[([^\]]+)\n([^\[]+\])'
-        processed_lyrics = re.sub(pattern2, r'[\1 \2', processed_lyrics)
         
         # 保存到文件
         with open(output_path, 'w', encoding='utf-8') as f:

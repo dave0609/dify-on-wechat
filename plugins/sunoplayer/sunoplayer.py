@@ -297,24 +297,19 @@ class sunoplayer(Plugin):
     def rename_file(self, filepath, prompt, file_counter):
         # 提取目录路径和扩展名
         dir_path, filename = os.path.split(filepath)
-        file_ext = os.path.splitext(filename)[1]
-
-        # 移除prompt中的标点符号和空格
-        cleaned_content = re.sub(r'[^\w]', '', prompt)
-        # 截取prompt的前10个字符
-        content_prefix = cleaned_content[:10]
-                
-        # 组装新的文件名
-        new_filename = f"{content_prefix}-{file_counter}"
-
-        # 拼接回完整的新文件路径
-        new_filepath = os.path.join(dir_path, new_filename + file_ext)
-
+        file_name, file_ext = os.path.splitext(filename)
+        
+        # 简化命名方式，只使用原始ID加序号
+        new_filename = f"{file_name}_{file_counter}"
+        
+        # 拼接回完整的新文件路径，使用.wav扩展名
+        new_filepath = os.path.join(dir_path, new_filename + ".wav")
+        
         # 重命名原文件
         try:
             os.rename(filepath, new_filepath)
         except OSError as e:
             logger.error(f"Error: {e.strerror}")
             return filepath
-
+        
         return new_filepath
