@@ -62,7 +62,7 @@ def custom_generate_audio(payload):
             url, 
             json=payload, 
             headers={'Content-Type': 'application/json'},
-            timeout=30  # 添加超时设置
+            timeout=300  # 添加超时设置
         )
         response.raise_for_status()  # 如果状态码不是200系列，将引发异常
         return response.json()
@@ -77,7 +77,7 @@ def extend_audio(payload):
             url, 
             json=payload, 
             headers={'Content-Type': 'application/json'},
-            timeout=30
+            timeout=300
         )
         response.raise_for_status()
         return response.json()
@@ -103,7 +103,7 @@ def generate_audio_by_prompt(payload):
 def get_audio_information(audio_ids):
     url = f"{base_url}/api/get?ids={audio_ids}"
     try:
-        response = session.get(url, timeout=30)
+        response = session.get(url, timeout=300)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -113,7 +113,7 @@ def get_audio_information(audio_ids):
 def get_quota_information():
     url = f"{base_url}/api/get_limit"
     try:
-        response = session.get(url, timeout=30)
+        response = session.get(url, timeout=300)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -123,7 +123,7 @@ def get_quota_information():
 def get_clip(clip_id):
     url = f"{base_url}/api/clip?id={clip_id}"
     try:
-        response = session.get(url, timeout=30)
+        response = session.get(url, timeout=300)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -134,7 +134,7 @@ def generate_whole_song(clip_id):
     payload = {"clip_id": clip_id}
     url = f"{base_url}/api/concat"
     try:
-        response = session.post(url, json=payload, timeout=30)
+        response = session.post(url, json=payload, timeout=300)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -144,7 +144,7 @@ def generate_whole_song(clip_id):
 def check_api_health():
     """检查API健康状态"""
     try:
-        response = session.get(f"{base_url}", timeout=10)
+        response = session.get(f"{base_url}", timeout=100)
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
@@ -161,7 +161,7 @@ def get_aligned_lyrics(audio_id):
     """
     url = f"{base_url}/api/get_aligned_lyrics?song_id={audio_id}"
     try:
-        response = session.get(url, timeout=30)
+        response = session.get(url, timeout=300)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
