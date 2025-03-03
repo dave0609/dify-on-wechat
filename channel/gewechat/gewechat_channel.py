@@ -131,8 +131,16 @@ class GeWeChatChannel(ChatChannel):
             # 清除 Markdown 格式后再发送
             reply_text = self.remove_markdown(reply.content).strip()
             ats = ""
-            if gewechat_message and gewechat_message.is_group:
+            # 检查回复内容是否已经包含@用户
+            already_at_user = False
+            if gewechat_message and gewechat_message.is_group and gewechat_message.actual_user_nickname:
+                at_pattern = f"@{gewechat_message.actual_user_nickname}"
+                already_at_user = at_pattern in reply_text
+            
+            # 只有在没有已经@用户的情况下才设置ats参数
+            if gewechat_message and gewechat_message.is_group and not already_at_user:
                 ats = gewechat_message.actual_user_id
+            
             self.client.post_text(self.app_id, receiver, reply_text, ats)
             logger.info("[gewechat] Do send text to {}: {}".format(receiver, reply_text))
         elif reply.type == ReplyType.VOICE:
