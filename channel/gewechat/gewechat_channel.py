@@ -131,11 +131,14 @@ class GeWeChatChannel(ChatChannel):
             # 清除 Markdown 格式后再发送
             reply_text = self.remove_markdown(reply.content).strip()
             ats = ""
-            # 检查回复内容是否已经包含@用户
+            # 检查回复内容是否已经包含@用户（可能带换行符）
             already_at_user = False
             if gewechat_message and gewechat_message.is_group and gewechat_message.actual_user_nickname:
-                at_pattern = f"@{gewechat_message.actual_user_nickname}"
-                already_at_user = at_pattern in reply_text
+                # 检查两种可能的@格式：带换行符和不带换行符
+                at_pattern1 = f"@{gewechat_message.actual_user_nickname}\n"
+                at_pattern2 = f"@{gewechat_message.actual_user_nickname}"
+                already_at_user = at_pattern1 in reply_text or (at_pattern2 in reply_text and not at_pattern2 + "\n" in reply_text)
+                logger.debug(f"[gewechat] 检查@用户: nickname={gewechat_message.actual_user_nickname}, already_at_user={already_at_user}, reply_text={reply_text[:50]}...")
             
             # 只有在没有已经@用户的情况下才设置ats参数
             if gewechat_message and gewechat_message.is_group and not already_at_user:

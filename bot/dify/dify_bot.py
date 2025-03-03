@@ -163,7 +163,7 @@ class DifyBot(Bot):
         if is_group:
             at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
         
-        reply = Reply(ReplyType.TEXT, at_prefix + answer)
+        reply = Reply(ReplyType.TEXT, answer)
         
         # 设置dify conversation_id, 依靠dify管理上下文
         if session.get_conversation_id() == '':
