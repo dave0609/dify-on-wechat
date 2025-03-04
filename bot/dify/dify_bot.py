@@ -202,7 +202,11 @@ class DifyBot(Bot):
             failover_model = conf().get("failover_model", "gpt-3.5-turbo")
             
             # 创建新的上下文，包含failover_model
-            failover_context = context.copy() if context else Context()
+            failover_context = Context()
+            # 手动复制原始context的内容
+            if context:
+                for key, value in context.items():
+                    failover_context[key] = value
             failover_context["gpt_model"] = failover_model
             
             # 使用ChatGPTBot处理请求
@@ -318,7 +322,11 @@ class DifyBot(Bot):
                 failover_model = conf().get("failover_model", "gpt-3.5-turbo")
                 
                 # 创建新的上下文，包含failover_model
-                failover_context = context.copy() if context else Context()
+                failover_context = Context()
+                # 手动复制原始context的内容
+                if context:
+                    for key, value in context.items():
+                        failover_context[key] = value
                 failover_context["gpt_model"] = failover_model
                 
                 # 使用ChatGPTBot处理请求
@@ -386,7 +394,11 @@ class DifyBot(Bot):
                 failover_model = conf().get("failover_model", "gpt-3.5-turbo")
                 
                 # 创建新的上下文，包含failover_model
-                failover_context = context.copy() if context else Context()
+                failover_context = Context()
+                # 手动复制原始context的内容
+                if context:
+                    for key, value in context.items():
+                        failover_context[key] = value
                 failover_context["gpt_model"] = failover_model
                 
                 # 使用ChatGPTBot处理请求
