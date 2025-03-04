@@ -201,12 +201,16 @@ class DifyBot(Bot):
             # 使用配置中的failover_model
             failover_model = conf().get("failover_model", "gpt-3.5-turbo")
             
-            # 创建新的上下文，包含failover_model
-            failover_context = Context()
-            # 手动复制原始context的内容
+            # 创建新的上下文，正确复制原始context的所有属性
+            failover_context = Context(type=ContextType.TEXT)
+            
+            # 如果原始context存在，复制其content和kwargs
             if context:
-                for key, value in context.items():
+                failover_context.content = context.content
+                for key, value in context.kwargs.items():
                     failover_context[key] = value
+                    
+            # 设置gpt_model
             failover_context["gpt_model"] = failover_model
             
             # 使用ChatGPTBot处理请求
@@ -321,12 +325,16 @@ class DifyBot(Bot):
                 # 使用配置中的failover_model
                 failover_model = conf().get("failover_model", "gpt-3.5-turbo")
                 
-                # 创建新的上下文，包含failover_model
-                failover_context = Context()
-                # 手动复制原始context的内容
+                # 创建新的上下文，正确复制原始context的所有属性
+                failover_context = Context(type=ContextType.TEXT)
+                
+                # 如果原始context存在，复制其content和kwargs
                 if context:
-                    for key, value in context.items():
+                    failover_context.content = context.content
+                    for key, value in context.kwargs.items():
                         failover_context[key] = value
+                    
+                # 设置gpt_model
                 failover_context["gpt_model"] = failover_model
                 
                 # 使用ChatGPTBot处理请求
@@ -393,12 +401,16 @@ class DifyBot(Bot):
                 # 使用配置中的failover_model
                 failover_model = conf().get("failover_model", "gpt-3.5-turbo")
                 
-                # 创建新的上下文，包含failover_model
-                failover_context = Context()
-                # 手动复制原始context的内容
+                # 创建新的上下文，正确复制原始context的所有属性
+                failover_context = Context(type=ContextType.TEXT)
+                
+                # 如果原始context存在，复制其content和kwargs
                 if context:
-                    for key, value in context.items():
+                    failover_context.content = context.content
+                    for key, value in context.kwargs.items():
                         failover_context[key] = value
+                    
+                # 设置gpt_model
                 failover_context["gpt_model"] = failover_model
                 
                 # 使用ChatGPTBot处理请求
