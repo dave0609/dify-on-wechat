@@ -158,11 +158,7 @@ class DifyBot(Bot):
         answer = rsp_data['answer']
         
         # 直接使用answer作为回复内容，不进行markdown解析
-        at_prefix = ""
-        is_group = context.get("isgroup", False)
-        if is_group:
-            at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
-        
+        # 不在这里添加@前缀，让gewechat_channel处理
         reply = Reply(ReplyType.TEXT, answer)
         
         # 设置dify conversation_id, 依靠dify管理上下文
@@ -237,9 +233,7 @@ class DifyBot(Bot):
         is_group = context.get("isgroup", False)
         for msg in msgs[:-1]:
             if msg['type'] == 'agent_message':
-                if is_group:
-                    at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
-                    msg['content'] = at_prefix + msg['content']
+                # 不在这里添加@前缀，让gewechat_channel处理
                 reply = Reply(ReplyType.TEXT, msg['content'])
                 channel.send(reply, context)
             elif msg['type'] == 'message_file':
