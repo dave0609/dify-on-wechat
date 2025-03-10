@@ -104,7 +104,7 @@ class DifyBot(Bot):
             if query.startswith(prefix):
                 # 提取画图提示词
                 prompt = query[len(prefix):].strip()
-                logger.info(f"[COZE] 检测到画图请求，触发词={prefix}，提示词={prompt}")
+                logger.info(f"[DIFY] 检测到画图请求，触发词={prefix}，提示词={prompt}")
                 # 调用OpenAIImage创建图片
                 success, result = self.image_creator.create_img(prompt, context=context)
                 if success:
@@ -113,6 +113,15 @@ class DifyBot(Bot):
                     return Reply(ReplyType.TEXT, result), None
                 
         try:
+            # 检查是否包含深度搜索关键词
+            deepsearch_keywords = ["深度搜索", "深度研究"]
+            is_deepsearch_query = any(keyword in query for keyword in deepsearch_keywords)
+            
+            if is_deepsearch_query:
+                logger.info(f"[DIFY] 检测到深度搜索请求: {query}")
+                deepsearch_model = conf().get("deepsearch_model", "sonar-reasoning-pro")
+                return self._use_specific_model(query, context, deepsearch_model)
+        
             session.count_user_message() # 限制一个conversation中消息数，防止conversation过长
             dify_app_type = self._get_dify_conf(context, "dify_app_type", 'chatbot')
             if dify_app_type == 'chatbot' or dify_app_type == 'chatflow':
@@ -129,6 +138,49 @@ class DifyBot(Bot):
             error_info = f"[DIFY] Exception: {e}"
             logger.exception(error_info)
             return None, UNKNOWN_ERROR_MSG
+
+    def _use_specific_model(self, query, context, model_name):
+        """使用指定的模型处理请求"""
+        try:
+            logger.info(f"[DIFY] 使用深度搜索模型处理请求: {model_name}")
+            import openai
+            from bot.chatgpt.chat_gpt_bot import ChatGPTBot
+            
+            # 确保从config中重新读取API配置
+            openai.api_key = conf().get("open_ai_api_key")
+            if conf().get("open_ai_api_base"):
+                openai.api_base = conf().get("open_ai_api_base")
+            proxy = conf().get("proxy")
+            if proxy:
+                openai.proxy = proxy
+                
+            logger.info(f"[DIFY] 使用API基础URL: {openai.api_base}")
+            
+            # 创建ChatGPTBot实例
+            specific_bot = ChatGPTBot()
+            
+            # 创建新的上下文，正确复制原始context的所有属性
+            specific_context = Context(type=ContextType.TEXT)
+            
+            # 如果原始context存在，复制其content和kwargs
+            if context:
+                specific_context.content = context.content
+                for key, value in context.kwargs.items():
+                    specific_context[key] = value
+                    
+            # 设置gpt_model
+            specific_context["gpt_model"] = model_name
+            
+            # 使用ChatGPTBot处理请求
+            reply = specific_bot.reply(query, specific_context)
+            
+            logger.info(f"[DIFY] 使用模型 {model_name} 处理成功")
+            return reply, None
+        except Exception as e:
+            # 如果特定模型失败，尝试使用故障转移模型
+            logger.exception(f"[DIFY] 特定模型处理失败: {e}，尝试使用故障转移模型")
+            return self._use_failover_bot(query, context)
+
 
     def _handle_chatbot(self, query: str, session: DifySession, context: Context):
         try:
