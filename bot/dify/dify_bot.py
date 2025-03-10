@@ -115,13 +115,14 @@ class DifyBot(Bot):
         try:
             # 检查是否包含深度搜索关键词
             deepsearch_keywords = ["深度搜索", "深度研究","深入研究","深度推理"]
-            is_deepsearch_query = any(keyword in query for keyword in deepsearch_keywords)
-            
-            if is_deepsearch_query:
-                logger.info(f"[DIFY] 检测到深度搜索请求: {query}")
-                deepsearch_model = conf().get("deepsearch_model", "sonar-reasoning-pro")
-                return self._use_specific_model(query, context, deepsearch_model)
-        
+            for keyword in deepsearch_keywords:
+                if query.startswith(keyword):
+                    # 截掉关键词，获取实际查询内容
+                    actual_query = query[len(keyword):].strip()
+                    logger.info(f"[DIFY] 检测到深度搜索请求: 关键词={keyword}, 实际查询={actual_query}")
+                    deepsearch_model = conf().get("deepsearch_model", "sonar-reasoning-pro")
+                    return self._use_specific_model(actual_query, context, deepsearch_model)            
+
             session.count_user_message() # 限制一个conversation中消息数，防止conversation过长
             dify_app_type = self._get_dify_conf(context, "dify_app_type", 'chatbot')
             if dify_app_type == 'chatbot' or dify_app_type == 'chatflow':
