@@ -114,7 +114,7 @@ class DifyBot(Bot):
                 
         try:
             # 检查是否包含深度搜索关键词
-            deepsearch_keywords = ["深度搜索", "深度研究"]
+            deepsearch_keywords = ["深度搜索", "深度研究","深入研究","深度推理"]
             is_deepsearch_query = any(keyword in query for keyword in deepsearch_keywords)
             
             if is_deepsearch_query:
