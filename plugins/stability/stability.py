@@ -968,10 +968,8 @@ class stability(Plugin):
         try:
             response = self.gemini_client.models.generate_content(
                 model="models/gemini-2.0-flash-exp",
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=['Image']
-                )
+                contents=prompt
+                # 移除响应模态配置，因为该模型不支持图像响应模态
             )
             
             # 从响应中提取图像数据
@@ -1000,11 +998,11 @@ class stability(Plugin):
             response = self.gemini_client.models.generate_content(
                 model="models/gemini-2.0-flash-exp",
                 contents=[
-                    {prompt},
+                    prompt,
                     image
                 ],
                 config=types.GenerateContentConfig(
-                    response_modalities=['Image']
+                    response_modalities=['Text', 'Image']
                 )
             )
             
