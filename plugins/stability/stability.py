@@ -1105,14 +1105,20 @@ class stability(Plugin):
             )
             )
             
-            # 检查是否有 IMAGE_SAFETY 问题
+            # 检查是否有 IMAGE_SAFETY 问题 - 根据实际响应格式修改
             if (hasattr(response, 'candidates') and response.candidates and 
-                hasattr(response.candidates[0], 'finish_reason') and 
-                str(response.candidates[0].finish_reason) == 'IMAGE_SAFETY'):
-                logger.error("[stability] 检测到图像安全问题: IMAGE_SAFETY")
-                logger.error(f"[stability] 完成原因: {response.candidates[0].finish_reason}")
-                return "IMAGE_SAFETY_ERROR"
+                hasattr(response.candidates[0], 'finish_reason')):
+                finish_reason = str(response.candidates[0].finish_reason)
+                if 'IMAGE_SAFETY' in finish_reason:
+                    logger.error(f"[stability] 检测到图像安全问题: {finish_reason}")
+                    return "IMAGE_SAFETY_ERROR"
             
+            # 检查是否有内容返回
+            if (hasattr(response, 'candidates') and response.candidates and 
+                response.candidates[0].content is None):
+                logger.error("[stability] 响应中没有内容，可能是安全过滤导致")
+                return "IMAGE_SAFETY_ERROR"
+                
             # 检查响应并提取图像数据
             if (hasattr(response, 'candidates') and response.candidates and 
                 response.candidates[0].content is not None and 
