@@ -1004,12 +1004,14 @@ class stability(Plugin):
                     image
                 ],
                 config=types.GenerateContentConfig(
-                    response_modalities=['Text', 'Image']
+                    response_modalities=['Image']
                 )
             )
             
             # 检查响应并提取图像数据
-            if hasattr(response, 'candidates') and response.candidates:
+            if (hasattr(response, 'candidates') and response.candidates and 
+                response.candidates[0].content is not None and 
+                hasattr(response.candidates[0].content, 'parts')):
                 for part in response.candidates[0].content.parts:
                     if part.inline_data is not None:
                         logger.info("[stability] Successfully received image data from Gemini")
