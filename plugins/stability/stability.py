@@ -284,71 +284,100 @@ class stability(Plugin):
             image_path = context.content
             logger.info(f"on_handle_context: 获取到图片路径 {image_path}")
 
-            if self.params_cache[user_id]['inpaint_quota'] > 0:
-                self.params_cache[user_id]['inpaint_quota'] = 0
-                self.call_inpaint_service(image_path, user_id, e_context)
+            try:
+                if self.params_cache[user_id]['inpaint_quota'] > 0:
+                    self.params_cache[user_id]['inpaint_quota'] = 0
+                    self.call_inpaint_service(image_path, user_id, e_context)
 
-            if self.params_cache[user_id]['upscale_quota'] > 0:
-                self.params_cache[user_id]['upscale_quota'] = 0
-                self.call_upscale_service(image_path, user_id, e_context)
+                elif self.params_cache[user_id]['upscale_quota'] > 0:
+                    self.params_cache[user_id]['upscale_quota'] = 0
+                    self.call_upscale_service(image_path, user_id, e_context)
 
-            if self.params_cache[user_id]['repair_quota'] > 0:
-                self.params_cache[user_id]['repair_quota'] = 0
-                self.call_repair_service(image_path, user_id, e_context)
-            
-            if self.params_cache[user_id]['erase_quota'] > 0:
-                self.params_cache[user_id]['erase_quota'] = 0
-                self.call_erase_service(image_path, e_context)
+                elif self.params_cache[user_id]['repair_quota'] > 0:
+                    self.params_cache[user_id]['repair_quota'] = 0
+                    self.call_repair_service(image_path, user_id, e_context)
+                
+                elif self.params_cache[user_id]['erase_quota'] > 0:
+                    self.params_cache[user_id]['erase_quota'] = 0
+                    self.call_erase_service(image_path, e_context)
 
-            if self.params_cache[user_id]['doodle_quota'] > 0:
-                self.params_cache[user_id]['doodle_quota'] = 0
-                self.call_doodle_service(image_path, user_id, e_context)
+                elif self.params_cache[user_id]['doodle_quota'] > 0:
+                    self.params_cache[user_id]['doodle_quota'] = 0
+                    self.call_doodle_service(image_path, user_id, e_context)
 
-            if self.params_cache[user_id]['rmbg_quota'] > 0:
-                self.params_cache[user_id]['rmbg_quota'] = 0
-                self.call_rmbg_service(image_path, user_id, e_context)
+                elif self.params_cache[user_id]['rmbg_quota'] > 0:
+                    self.params_cache[user_id]['rmbg_quota'] = 0
+                    self.call_rmbg_service(image_path, user_id, e_context)
 
-            if self.params_cache[user_id]['outpaint_quota'] > 0:
-                self.params_cache[user_id]['outpaint_quota'] = 0
-                self.call_outpaint_service(image_path, user_id, e_context)
-
-            # 删除文件
-            os.remove(image_path)
-            logger.info(f"文件 {image_path} 已删除")
+                elif self.params_cache[user_id]['outpaint_quota'] > 0:
+                    self.params_cache[user_id]['outpaint_quota'] = 0
+                    self.call_outpaint_service(image_path, user_id, e_context)
+            finally:
+                # 处理完成后删除文件
+                try:
+                    os.remove(image_path)
+                    logger.info(f"文件 {image_path} 已删除")
+                except Exception as e:
+                    logger.error(f"删除文件 {image_path} 失败: {e}")
 
     def call_inpaint_service(self, image_path, user_id, e_context):
-        # 使用Google Gemini API编辑图片
-        prompt = self.params_cache[user_id]['edit_prompt']
-        logger.info(f"Editing image with Gemini, prompt: {prompt}")
-        
-        # 使用Gemini编辑图片
-        if self.gemini_client:
-            try:
-                image_data = self.edit_image_with_gemini(image_path, prompt)
-                if image_data:
-                    # 保存编辑后的图片
-                    imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
-                    logger.info(f"handle google edit result, imagePath = {imgpath}")
+        # 首先创建图片的副本，以防原图被删除
+        try:
+            # 创建临时目录中的图片副本
+            image_copy_path = TmpDir().path() + "original_" + str(uuid.uuid4()) + os.path.splitext(image_path)[1]
+            with open(image_path, 'rb') as src_file:
+                with open(image_copy_path, 'wb') as dst_file:
+                    dst_file.write(src_file.read())
+            logger.info(f"Created image copy at {image_copy_path}")
+            
+            # 使用Google Gemini API编辑图片
+            prompt = self.params_cache[user_id]['edit_prompt']
+            logger.info(f"Editing image with Gemini, prompt: {prompt}")
+            
+            # 使用Gemini编辑图片
+            if self.gemini_client:
+                try:
+                    # 使用图片副本进行处理
+                    image_data = self.edit_image_with_gemini(image_copy_path, prompt)
+                    if image_data:
+                        # 保存编辑后的图片
+                        imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
+                        logger.info(f"handle google edit result, imagePath = {imgpath}")
 
-                    with open(imgpath, 'wb') as file:
-                        file.write(image_data)
-                    
-                    # 直接使用保存的图片路径
-                    rt = ReplyType.IMAGE
-                    image = self.img_to_png(imgpath)
-                    if image is False:
-                        rc = "处理图片失败"
-                        rt = ReplyType.TEXT
-                    else:
-                        rc = image
-                    
-                    reply = Reply(rt, rc)
-                    e_context["reply"] = reply
-                    e_context.action = EventAction.BREAK_PASS
-                    return
-            except Exception as e:
-                logger.error(f"[stability] Gemini edit failed: {e}")
-
+                        with open(imgpath, 'wb') as file:
+                            file.write(image_data)
+                        
+                        # 直接使用保存的图片路径
+                        rt = ReplyType.IMAGE
+                        image = self.img_to_png(imgpath)
+                        if image is False:
+                            rc = "处理图片失败"
+                            rt = ReplyType.TEXT
+                        else:
+                            rc = image
+                        
+                        reply = Reply(rt, rc)
+                        e_context["reply"] = reply
+                        e_context.action = EventAction.BREAK_PASS
+                        
+                        # 处理完成后删除副本
+                        try:
+                            os.remove(image_copy_path)
+                            logger.info(f"Removed image copy {image_copy_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to remove image copy {image_copy_path}: {e}")
+                        
+                        return
+                except Exception as e:
+                    logger.error(f"[stability] Gemini edit failed: {e}")
+                    # 如果处理失败，也要尝试删除副本
+                    try:
+                        os.remove(image_copy_path)
+                        logger.info(f"Removed image copy {image_copy_path} after error")
+                    except Exception as e2:
+                        logger.error(f"Failed to remove image copy {image_copy_path}: {e2}")
+        except Exception as e:
+            logger.error(f"[stability] Failed to create image copy: {e}")
 
     def handle_stability(self, image_path, user_id, e_context):
         logger.info(f"handle_stability")
