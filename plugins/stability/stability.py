@@ -112,7 +112,7 @@ class stability(Plugin):
             self.params_cache[user_id] = {}
             self.params_cache[user_id]['inpaint_quota'] = 0
             self.params_cache[user_id]['search_prompt'] = None
-            self.params_cache[user_id]['prompt'] = None
+            self.params_cache[user_id]['edit_prompt'] = None
             self.params_cache[user_id]['upscale_quota'] = 0
             self.params_cache[user_id]['upscale_prompt'] = None
             self.params_cache[user_id]['repair_quota'] = 0 
@@ -134,7 +134,7 @@ class stability(Plugin):
                     logger.info(f"translated edit_prompt to: {edit_prompt}")
                     
                     # 存储到用户缓存中
-                    self.params_cache[user_id]['prompt'] = edit_prompt
+                    self.params_cache[user_id]['edit_prompt'] = edit_prompt
                     self.params_cache[user_id]['inpaint_quota'] = 1
                     tip = f"💡已经开启修图服务，请再发送一张图片进行处理"
                 else:
@@ -318,7 +318,7 @@ class stability(Plugin):
 
     def call_inpaint_service(self, image_path, user_id, e_context):
         # 使用Google Gemini API编辑图片
-        prompt = self.params_cache[user_id]['prompt']
+        prompt = self.params_cache[user_id]['edit_prompt']
         logger.info(f"Editing image with Gemini, prompt: {prompt}")
         
         # 尝试使用Gemini编辑图片
@@ -331,6 +331,7 @@ class stability(Plugin):
                     with open(imgpath, 'wb') as file:
                         file.write(image_data)
                     
+                    # 直接使用保存的图片路径
                     rt = ReplyType.IMAGE
                     image = self.img_to_png(imgpath)
                     if image is False:
@@ -345,11 +346,7 @@ class stability(Plugin):
                     return
             except Exception as e:
                 logger.error(f"[stability] Gemini edit failed: {e}")
-                # 如果Gemini编辑失败，回退到stability API
-        
-        # 如果Gemini不可用或编辑失败，回退到原来的stability API
-        logger.info("Falling back to stability API")
-        self.handle_stability(image_path, user_id, e_context)
+
 
     def handle_stability(self, image_path, user_id, e_context):
         logger.info(f"handle_stability")
@@ -1014,6 +1011,7 @@ class stability(Plugin):
                 if part.inline_data is not None:
                     return part.inline_data.data
                     
+            logger.error("[stability] No image data in Gemini response")
             return None
         except Exception as e:
             logger.error(f"[stability] Error editing image with Gemini: {e}")
