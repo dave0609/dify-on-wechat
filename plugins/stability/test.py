@@ -9,6 +9,8 @@ import base64
 import PIL
 
 # 从config.json读取API密钥
+
+
 def load_api_key():
     try:
         with open('config.json', 'r', encoding='utf-8') as f:
@@ -17,6 +19,7 @@ def load_api_key():
     except Exception as e:
         print(f"读取配置文件时出错: {e}")
         return None
+
 
 # 获取API密钥
 api_key = load_api_key()
@@ -37,6 +40,7 @@ def display_response(response):
             data = part.inline_data.data
             display(IPythonImage(data=data))
 
+
 def save_image(response, path):
     for part in response.candidates[0].content.parts:
         if part.text is not None:
@@ -44,7 +48,7 @@ def save_image(response, path):
         elif part.inline_data is not None:
             mime = part.inline_data.mime_type
             data = part.inline_data.data
-            
+
             # 检查数据是否为文本格式
             try:
                 text_data = data.decode('utf-8', errors='ignore')
@@ -56,14 +60,14 @@ def save_image(response, path):
                         f.write(image_data)
                     print(f"已从base64 URI解码并保存图像到 {path}")
                     return
-                
+
                 # 检查是否为纯base64
                 try:
                     image_data = base64.b64decode(text_data)
                     with open(path, 'wb') as f:
                         f.write(image_data)
                     print(f"已从纯base64解码并保存图像到 {path}")
-                    
+
                     try:
                         img = PIL.Image.open(path)
                         print(f"成功验证图像: {img.format}, {img.size}")
@@ -72,7 +76,7 @@ def save_image(response, path):
                         print("解码后的数据不是有效图像，尝试其他方法")
                 except:
                     print("数据不是有效的base64编码")
-                
+
                 # 检查是否为JSON格式
                 try:
                     json_data = json.loads(text_data)
@@ -84,37 +88,21 @@ def save_image(response, path):
                         return
                 except:
                     print("数据不是有效的JSON格式")
-                
-                with open(path + '.txt', 'w') as f:
-                    f.write(text_data[:1000])
-                print(f"已保存数据前1000个字符到 {path}.txt 用于检查")
             except:
                 print("数据不是文本格式")
-            
+
             with open(path, 'wb') as f:
                 f.write(data)
             print(f"已保存原始数据到 {path}")
 
-
-# 生成飞行猪图像
-contents = ('Hi, can you create a 3d rendered image of a pig '
-            'with wings and a top hat flying over a happy '
-            'futuristic scifi city with lots of greenery?')
+import PIL.Image
+image = PIL.Image.open('flying_pig.png')
 response = client.models.generate_content(
     model="models/gemini-2.0-flash-exp",
-    contents=contents,
-    config=types.GenerateContentConfig(
-        response_modalities=['Text', 'Image']
-    )
-)
-display_response(response)
-save_image(response, 'flying_pig.png')
-
-# 生成飞行猫图像
-contents = ('把猪替换成龙猫')
-response = client.models.generate_content(
-    model="models/gemini-2.0-flash-exp",
-    contents=contents,
+    contents=[
+                    "Hey, could you edit this image to make a cat instead of a pig?",
+                    image
+                ],
     config=types.GenerateContentConfig(
         response_modalities=['Text', 'Image']
     )
