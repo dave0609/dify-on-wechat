@@ -1004,7 +1004,7 @@ class stability(Plugin):
                     image
                 ],
                 config=types.GenerateContentConfig(
-                    response_modalities=['Image']
+                    response_modalities=['Text', 'Image']
                 )
             )
             
