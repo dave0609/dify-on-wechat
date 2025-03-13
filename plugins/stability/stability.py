@@ -991,15 +991,16 @@ class stability(Plugin):
             return None
             
         try:
-            # 打开图像
-            from PIL import Image as PILImage
-            image = PILImage.open(image_path)
+            import PIL.Image
+            image = PIL.Image.open(image_path)
+            
+            logger.info(f"Using prompt: {prompt}")
             
             # 发送编辑请求
             response = self.gemini_client.models.generate_content(
                 model="models/gemini-2.0-flash-exp",
                 contents=[
-                    f"{prompt}",
+                    {prompt},
                     image
                 ],
                 config=types.GenerateContentConfig(
@@ -1007,15 +1008,20 @@ class stability(Plugin):
                 )
             )
             
-            # 从响应中提取图像数据
-            for part in response.candidates[0].content.parts:
-                if part.inline_data is not None:
-                    return part.inline_data.data
-                    
+            # 检查响应并提取图像数据
+            if hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data is not None:
+                        logger.info("[stability] Successfully received image data from Gemini")
+                        return part.inline_data.data
+            
             logger.error("[stability] No image data in Gemini response")
             return None
         except Exception as e:
             logger.error(f"[stability] Error editing image with Gemini: {e}")
+            # 打印更详细的错误信息
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     def img_to_jpeg(self, content):
