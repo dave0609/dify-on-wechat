@@ -321,13 +321,15 @@ class stability(Plugin):
         prompt = self.params_cache[user_id]['edit_prompt']
         logger.info(f"Editing image with Gemini, prompt: {prompt}")
         
-        # 尝试使用Gemini编辑图片
+        # 使用Gemini编辑图片
         if self.gemini_client:
             try:
                 image_data = self.edit_image_with_gemini(image_path, prompt)
                 if image_data:
                     # 保存编辑后的图片
                     imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
+                    logger.info(f"handle google edit result, imagePath = {imgpath}")
+
                     with open(imgpath, 'wb') as file:
                         file.write(image_data)
                     
