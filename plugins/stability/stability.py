@@ -365,25 +365,9 @@ class stability(Plugin):
                                     f.write(decoded_data)
                                 logger.info(f"已从纯base64解码并保存图像到 {imgpath}")
                                 
-                                # 验证是否为有效图像
-                                try:
-                                    img = PIL.Image.open(imgpath)
-                                    logger.info(f"成功验证图像: {img.format}, {img.size}")
-                                except Exception as e:
-                                    logger.error(f"解码后的数据不是有效图像: {e}")
                             except Exception as e:
                                 logger.error(f"数据不是有效的base64编码: {e}")
                             
-                            # 检查是否为JSON格式
-                            try:
-                                json_data = json.loads(text_data)
-                                if 'image' in json_data:
-                                    image_data = base64.b64decode(json_data['image'])
-                                    with open(imgpath, 'wb') as f:
-                                        f.write(image_data)
-                                    logger.info(f"已从JSON提取并保存图像到 {imgpath}")
-                            except Exception as e:
-                                logger.error(f"数据不是有效的JSON格式: {e}")
                     except Exception as e:
                         logger.error(f"数据不是文本格式: {e}")
                     
