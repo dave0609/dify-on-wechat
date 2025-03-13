@@ -329,15 +329,38 @@ class stability(Plugin):
                     imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
                     logger.info(f"handle google edit result, imagePath = {imgpath}")
 
+                    # 直接保存原始数据
                     with open(imgpath, 'wb') as file:
                         file.write(image_data)
+                    
+                    # 尝试使用PIL打开并重新保存图像
+                    try:
+                        # 创建一个临时文件路径
+                        temp_path = imgpath + ".temp.png"
+                        # 尝试打开并重新保存
+                        img = PIL.Image.open(BytesIO(image_data))
+                        img.save(temp_path)
+                        # 如果成功，使用重新保存的图像
+                        if os.path.exists(temp_path):
+                            imgpath = temp_path
+                            logger.info(f"Successfully converted image to {imgpath}")
+                    except Exception as e:
+                        logger.error(f"Failed to convert image: {e}")
+                        # 继续使用原始保存的图像
                     
                     # 直接使用保存的图片路径
                     rt = ReplyType.IMAGE
                     image = self.img_to_png(imgpath)
                     if image is False:
-                        rc = "处理图片失败"
-                        rt = ReplyType.TEXT
+                        # 如果转换失败，尝试直接使用BytesIO
+                        try:
+                            image = BytesIO(image_data)
+                            image.seek(0)
+                            rt = ReplyType.IMAGE
+                            rc = image
+                        except:
+                            rc = "处理图片失败"
+                            rt = ReplyType.TEXT
                     else:
                         rc = image
                     
