@@ -335,6 +335,9 @@ class stability(Plugin):
                     
                     # 尝试使用PIL打开并重新保存图像
                     try:
+                        # 导入PIL.Image，避免名称冲突
+                        import PIL.Image
+                        from io import BytesIO
                         # 创建一个临时文件路径
                         temp_path = imgpath + ".temp.png"
                         # 尝试打开并重新保存
