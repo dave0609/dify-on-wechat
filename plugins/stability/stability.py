@@ -327,6 +327,16 @@ class stability(Plugin):
         if self.gemini_client:
             try:
                 image_data = self.edit_image_with_gemini(image_path, prompt)
+                
+                # 检查是否有安全问题
+                if image_data == "IMAGE_SAFETY_ERROR":
+                    rc = "由于图像安全策略限制，无法处理该图像。请尝试使用其他图片或修改提示词。"
+                    rt = ReplyType.TEXT
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+                    return
+                    
                 if image_data:
                     # 保存编辑后的图片
                     imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
@@ -1073,9 +1083,35 @@ class stability(Plugin):
                     image
                 ],
                 config=types.GenerateContentConfig(
-                    response_modalities=['Text', 'Image']
-                )
+                safety_settings=[
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE
+                    )
+                ],
+                response_modalities=['Text', 'Image']
             )
+            )
+            
+            # 检查是否有 IMAGE_SAFETY 问题
+            if (hasattr(response, 'candidates') and response.candidates and 
+                hasattr(response.candidates[0], 'finish_reason') and 
+                str(response.candidates[0].finish_reason) == 'IMAGE_SAFETY'):
+                logger.error("[stability] 检测到图像安全问题: IMAGE_SAFETY")
+                logger.error(f"[stability] 完成原因: {response.candidates[0].finish_reason}")
+                return "IMAGE_SAFETY_ERROR"
             
             # 检查响应并提取图像数据
             if (hasattr(response, 'candidates') and response.candidates and 
