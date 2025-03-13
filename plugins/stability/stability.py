@@ -19,6 +19,8 @@ import cv2
 import numpy as np
 import requests
 import translators as ts
+from google import genai
+from google.genai import types
 
 @plugins.register(
     name="stability",
@@ -75,8 +77,23 @@ class stability(Plugin):
             self.jimeng_api_key = self.config.get("jimeng_api_key", "")
             self.jimeng_url = self.config.get("jimeng_url", "")
             self.total_timeout = self.config.get("total_timeout", 5)
+            self.google_key = self.config.get("google_key", "")
 
             self.params_cache = ExpiredDict(500)
+            
+            # 初始化Google Gemini客户端
+            if self.google_key:
+                try:
+                    genai.configure(api_key=self.google_key)
+                    self.gemini_client = genai.Client(api_key=self.google_key)
+                    logger.info("[stability] Google Gemini client initialized.")
+                except Exception as e:
+                    logger.error(f"[stability] Failed to initialize Google Gemini client: {e}")
+                    self.gemini_client = None
+            else:
+                logger.warn("[stability] Google API key not provided, Gemini features will be unavailable.")
+                self.gemini_client = None
+                
             # 初始化成功日志
             logger.info("[stability] inited.")
         except Exception as e:
@@ -108,45 +125,20 @@ class stability(Plugin):
 
         if e_context['context'].type == ContextType.TEXT:
             if content.startswith(self.inpaint_prefix):
-                # Call new function to handle search operation
+                # 匹配上了inpaint_prefix，截取后面的描述作为edit的prompt
                 pattern = self.inpaint_prefix + r"\s(.+)"
                 match = re.match(pattern, content)
-                if match: ##   匹配上了修图的指令
-                    query = content[len(self.inpaint_prefix):].strip()
-                    pattern = r"把(.*?)替换成([^，。,.!?;:\s]*).*"
-                    match = re.search(pattern, query)
-                    if match: ##   匹配上了中文的描述
-                        search_prompt = match[1].strip()
-                        prompt = match[2].strip()
-                        
-                        logger.info(f"search_prompt={search_prompt}")
-                        logger.info(f"prompt={prompt}" )
-
-                        search_prompt = self.translate_to_english(search_prompt)
-                        logger.info(f"translate search_prompt to : {search_prompt}")
-                        prompt = self.translate_to_english(prompt)
-                        logger.info(f"translate search_prompt to : {prompt}")
-                        self.params_cache[user_id]['search_prompt'] = search_prompt
-                        self.params_cache[user_id]['prompt'] = prompt
-                        self.params_cache[user_id]['inpaint_quota'] = 1
-                        tip = f"💡已经开启修图服务，请再发送一张图片进行处理"
-
-                    else:
-                        pattern = re.compile(r'replace (.*?) to (.*?)$')
-                        logger.info(f"query={query}")
-                        match = pattern.search(query)
-                        if match is None:
-                            tip = f"❌错误的命令\n\n💡修图指令格式为:\n\n{self.inpaint_prefix}+ 空格 + 把xxx替换成yyy\n{self.inpaint_prefix}+ 空格 + replace xxx to yyy\n例如:修图 把狗替换成猫\n或者:修图 replace water to sand"
-                        else:  ##   匹配上了英文的描述
-                            search_prompt, prompt = match.groups()
-                            logger.info(f"search_prompt={search_prompt}")
-                            logger.info(f"prompt={prompt}" )
-                            self.params_cache[user_id]['search_prompt'] = search_prompt
-                            self.params_cache[user_id]['prompt'] = prompt
-                            self.params_cache[user_id]['inpaint_quota'] = 1
-                            tip = f"💡已经开启修图服务，请再发送一张图片进行处理"
+                if match:  # 匹配上了修图的指令
+                    edit_prompt = match.group(1).strip()  # 截取后面的描述作为edit的prompt
+                    logger.info(f"edit_prompt={edit_prompt}")
+                    logger.info(f"translated edit_prompt to: {edit_prompt}")
+                    
+                    # 存储到用户缓存中
+                    self.params_cache[user_id]['prompt'] = edit_prompt
+                    self.params_cache[user_id]['inpaint_quota'] = 1
+                    tip = f"💡已经开启修图服务，请再发送一张图片进行处理"
                 else:
-                    tip = f"💡欢迎使用修图服务，修图指令格式为:\n\n{self.inpaint_prefix}+ 空格 + 把xxx替换成yyy\n{self.inpaint_prefix}+ 空格 + replace xxx to yyy\n例如:修图 把狗替换成猫\n或者:修图 replace water to sand"
+                    tip = f"💡欢迎使用修图服务，修图指令格式为:\n\n{self.inpaint_prefix}+ 空格 + 描述\n例如: {self.inpaint_prefix} 把图片变成卡通风格"
 
                 reply = Reply(type=ReplyType.TEXT, content= tip)
                 e_context["reply"] = reply
@@ -325,6 +317,38 @@ class stability(Plugin):
             logger.info(f"文件 {image_path} 已删除")
 
     def call_inpaint_service(self, image_path, user_id, e_context):
+        # 使用Google Gemini API编辑图片
+        prompt = self.params_cache[user_id]['prompt']
+        logger.info(f"Editing image with Gemini, prompt: {prompt}")
+        
+        # 尝试使用Gemini编辑图片
+        if self.gemini_client:
+            try:
+                image_data = self.edit_image_with_gemini(image_path, prompt)
+                if image_data:
+                    # 保存编辑后的图片
+                    imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
+                    with open(imgpath, 'wb') as file:
+                        file.write(image_data)
+                    
+                    rt = ReplyType.IMAGE
+                    image = self.img_to_png(imgpath)
+                    if image is False:
+                        rc = "处理图片失败"
+                        rt = ReplyType.TEXT
+                    else:
+                        rc = image
+                    
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+                    return
+            except Exception as e:
+                logger.error(f"[stability] Gemini edit failed: {e}")
+                # 如果Gemini编辑失败，回退到stability API
+        
+        # 如果Gemini不可用或编辑失败，回退到原来的stability API
+        logger.info("Falling back to stability API")
         self.handle_stability(image_path, user_id, e_context)
 
     def handle_stability(self, image_path, user_id, e_context):
@@ -936,6 +960,64 @@ class stability(Plugin):
     def translate_to_english(self, text):
         logger.info(f"translate text = {text}")
         return ts.translate_text(text, translator='alibaba')
+        
+    def generate_image_with_gemini(self, prompt):
+        """使用Google Gemini生成图像"""
+        if not self.gemini_client:
+            logger.error("[stability] Gemini client not initialized")
+            return None
+            
+        try:
+            response = self.gemini_client.models.generate_content(
+                model="models/gemini-2.0-flash-exp",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=['Image']
+                )
+            )
+            
+            # 从响应中提取图像数据
+            for part in response.candidates[0].content.parts:
+                if part.inline_data is not None:
+                    return part.inline_data.data
+                    
+            return None
+        except Exception as e:
+            logger.error(f"[stability] Error generating image with Gemini: {e}")
+            return None
+            
+    def edit_image_with_gemini(self, image_path, prompt):
+        """使用Google Gemini编辑图像"""
+        if not self.gemini_client:
+            logger.error("[stability] Gemini client not initialized")
+            return None
+            
+        try:
+            # 打开图像
+            from PIL import Image as PILImage
+            image = PILImage.open(image_path)
+            
+            # 发送编辑请求
+            response = self.gemini_client.models.generate_content(
+                model="models/gemini-2.0-flash-exp",
+                contents=[
+                    f"{prompt}",
+                    image
+                ],
+                config=types.GenerateContentConfig(
+                    response_modalities=['Image']
+                )
+            )
+            
+            # 从响应中提取图像数据
+            for part in response.candidates[0].content.parts:
+                if part.inline_data is not None:
+                    return part.inline_data.data
+                    
+            return None
+        except Exception as e:
+            logger.error(f"[stability] Error editing image with Gemini: {e}")
+            return None
 
     def img_to_jpeg(self, content):
         try:
@@ -1004,4 +1086,3 @@ class stability(Plugin):
 
         # 保存掩膜图片
         cv2.imwrite(save_path, mask)
-    

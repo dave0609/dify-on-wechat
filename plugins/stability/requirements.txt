@@ -2,3 +2,4 @@ Pillow
 rembg
 opencv-python
 translators
+google-genai
