@@ -1015,7 +1015,17 @@ class stability(Plugin):
                 for part in response.candidates[0].content.parts:
                     if part.inline_data is not None:
                         logger.info("[stability] Successfully received image data from Gemini")
+                        
+                        # 直接返回原始二进制数据，不尝试处理
                         return part.inline_data.data
+                        
+                        # 如果上面的方法在某些情况下仍然有问题，可以尝试以下备选方案：
+                        # 1. 保存为临时文件再读取
+                        # temp_path = TmpDir().path() + "gemini_temp_" + str(uuid.uuid4()) + ".raw"
+                        # with open(temp_path, 'wb') as f:
+                        #     f.write(part.inline_data.data)
+                        # with open(temp_path, 'rb') as f:
+                        #     return f.read()
             
             logger.error("[stability] No image data in Gemini response")
             return None
