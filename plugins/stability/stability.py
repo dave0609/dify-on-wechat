@@ -329,6 +329,10 @@ class stability(Plugin):
                     imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
                     logger.info(f"handle google edit result, imagePath = {imgpath}")
                     
+                    # 直接保存原始数据
+                    with open(imgpath, 'wb') as file:
+                        file.write(image_data)
+                    
                     # 检查数据是否为文本格式
                     try:
                         text_data = image_data.decode('utf-8', errors='ignore')
@@ -342,47 +346,63 @@ class stability(Plugin):
                         else:
                             # 检查是否为纯base64
                             try:
+                                # 尝试解码为base64
                                 decoded_data = base64.b64decode(text_data)
                                 with open(imgpath, 'wb') as f:
                                     f.write(decoded_data)
                                 logger.info(f"已从纯base64解码并保存图像到 {imgpath}")
                                 
+                                # 验证是否为有效图像
                                 try:
                                     img = PIL.Image.open(imgpath)
                                     logger.info(f"成功验证图像: {img.format}, {img.size}")
-                                except:
-                                    logger.error("解码后的数据不是有效图像，尝试其他方法")
-                            except:
-                                logger.error("数据不是有效的base64编码")
-                                
-                                # 检查是否为JSON格式
-                                try:
-                                    json_data = json.loads(text_data)
-                                    if 'image' in json_data:
-                                        image_data = base64.b64decode(json_data['image'])
-                                        with open(imgpath, 'wb') as f:
-                                            f.write(image_data)
-                                        logger.info(f"已从JSON提取并保存图像到 {imgpath}")
-                                except:
-                                    logger.error("数据不是有效的JSON格式")
-                                    
-                                    with open(imgpath + '.txt', 'w') as f:
-                                        f.write(text_data[:1000])
-                                    logger.info(f"已保存数据前1000个字符到 {imgpath}.txt 用于检查")
-                    except:
-                        logger.error("数据不是文本格式")
+                                except Exception as e:
+                                    logger.error(f"解码后的数据不是有效图像: {e}")
+                            except Exception as e:
+                                logger.error(f"数据不是有效的base64编码: {e}")
+                            
+                            # 检查是否为JSON格式
+                            try:
+                                json_data = json.loads(text_data)
+                                if 'image' in json_data:
+                                    image_data = base64.b64decode(json_data['image'])
+                                    with open(imgpath, 'wb') as f:
+                                        f.write(image_data)
+                                    logger.info(f"已从JSON提取并保存图像到 {imgpath}")
+                            except Exception as e:
+                                logger.error(f"数据不是有效的JSON格式: {e}")
+                    except Exception as e:
+                        logger.error(f"数据不是文本格式: {e}")
                     
-                    # 如果所有尝试都失败，直接保存原始数据
-                    with open(imgpath, 'wb') as f:
-                        f.write(image_data)
-                    logger.info(f"已保存原始数据到 {imgpath}")
+                    # 尝试使用PIL打开并重新保存图像
+                    try:
+                        # 创建一个临时文件路径
+                        temp_path = imgpath + ".temp.png"
+                        # 尝试打开并重新保存
+                        img = PIL.Image.open(imgpath)
+                        img.save(temp_path)
+                        # 如果成功，使用重新保存的图像
+                        if os.path.exists(temp_path):
+                            imgpath = temp_path
+                            logger.info(f"Successfully converted image to {imgpath}")
+                    except Exception as e:
+                        logger.error(f"Failed to convert image: {e}")
                     
                     # 使用保存的图片
                     rt = ReplyType.IMAGE
                     image = self.img_to_png(imgpath)
                     if image is False:
-                        rc = "处理图片失败"
-                        rt = ReplyType.TEXT
+                        # 如果转换失败，尝试直接使用BytesIO
+                        try:
+                            from io import BytesIO
+                            image = BytesIO(image_data)
+                            image.seek(0)
+                            rt = ReplyType.IMAGE
+                            rc = image
+                        except Exception as e:
+                            logger.error(f"Failed to use BytesIO: {e}")
+                            rc = "处理图片失败"
+                            rt = ReplyType.TEXT
                     else:
                         rc = image
                     
@@ -392,6 +412,8 @@ class stability(Plugin):
                     return
             except Exception as e:
                 logger.error(f"[stability] Gemini edit failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
     def handle_stability(self, image_path, user_id, e_context):
         logger.info(f"handle_stability")
