@@ -328,42 +328,61 @@ class stability(Plugin):
                     # 保存编辑后的图片
                     imgpath = TmpDir().path() + "gemini_edit_" + str(uuid.uuid4()) + ".png"
                     logger.info(f"handle google edit result, imagePath = {imgpath}")
-
-                    # 直接保存原始数据
-                    with open(imgpath, 'wb') as file:
-                        file.write(image_data)
                     
-                    # 尝试使用PIL打开并重新保存图像
+                    # 检查数据是否为文本格式
                     try:
-                        # 导入PIL.Image，避免名称冲突
-                        import PIL.Image
-                        from io import BytesIO
-                        # 创建一个临时文件路径
-                        temp_path = imgpath + ".temp.png"
-                        # 尝试打开并重新保存
-                        img = PIL.Image.open(BytesIO(image_data))
-                        img.save(temp_path)
-                        # 如果成功，使用重新保存的图像
-                        if os.path.exists(temp_path):
-                            imgpath = temp_path
-                            logger.info(f"Successfully converted image to {imgpath}")
-                    except Exception as e:
-                        logger.error(f"Failed to convert image: {e}")
-                        # 继续使用原始保存的图像
+                        text_data = image_data.decode('utf-8', errors='ignore')
+                        # 检查是否为base64编码的图像
+                        if text_data.startswith('data:image'):
+                            base64_data = re.sub(r'^data:image/[^;]+;base64,', '', text_data)
+                            image_data = base64.b64decode(base64_data)
+                            with open(imgpath, 'wb') as f:
+                                f.write(image_data)
+                            logger.info(f"已从base64 URI解码并保存图像到 {imgpath}")
+                        else:
+                            # 检查是否为纯base64
+                            try:
+                                decoded_data = base64.b64decode(text_data)
+                                with open(imgpath, 'wb') as f:
+                                    f.write(decoded_data)
+                                logger.info(f"已从纯base64解码并保存图像到 {imgpath}")
+                                
+                                try:
+                                    img = PIL.Image.open(imgpath)
+                                    logger.info(f"成功验证图像: {img.format}, {img.size}")
+                                except:
+                                    logger.error("解码后的数据不是有效图像，尝试其他方法")
+                            except:
+                                logger.error("数据不是有效的base64编码")
+                                
+                                # 检查是否为JSON格式
+                                try:
+                                    json_data = json.loads(text_data)
+                                    if 'image' in json_data:
+                                        image_data = base64.b64decode(json_data['image'])
+                                        with open(imgpath, 'wb') as f:
+                                            f.write(image_data)
+                                        logger.info(f"已从JSON提取并保存图像到 {imgpath}")
+                                except:
+                                    logger.error("数据不是有效的JSON格式")
+                                    
+                                    with open(imgpath + '.txt', 'w') as f:
+                                        f.write(text_data[:1000])
+                                    logger.info(f"已保存数据前1000个字符到 {imgpath}.txt 用于检查")
+                    except:
+                        logger.error("数据不是文本格式")
                     
-                    # 直接使用保存的图片路径
+                    # 如果所有尝试都失败，直接保存原始数据
+                    with open(imgpath, 'wb') as f:
+                        f.write(image_data)
+                    logger.info(f"已保存原始数据到 {imgpath}")
+                    
+                    # 使用保存的图片
                     rt = ReplyType.IMAGE
                     image = self.img_to_png(imgpath)
                     if image is False:
-                        # 如果转换失败，尝试直接使用BytesIO
-                        try:
-                            image = BytesIO(image_data)
-                            image.seek(0)
-                            rt = ReplyType.IMAGE
-                            rc = image
-                        except:
-                            rc = "处理图片失败"
-                            rt = ReplyType.TEXT
+                        rc = "处理图片失败"
+                        rt = ReplyType.TEXT
                     else:
                         rc = image
                     
@@ -373,7 +392,6 @@ class stability(Plugin):
                     return
             except Exception as e:
                 logger.error(f"[stability] Gemini edit failed: {e}")
-
 
     def handle_stability(self, image_path, user_id, e_context):
         logger.info(f"handle_stability")
@@ -1039,19 +1057,11 @@ class stability(Plugin):
                 response.candidates[0].content is not None and 
                 hasattr(response.candidates[0].content, 'parts')):
                 for part in response.candidates[0].content.parts:
-                    if part.inline_data is not None:
+                    if part.text is not None:
+                        continue
+                    elif part.inline_data is not None:
                         logger.info("[stability] Successfully received image data from Gemini")
-                        
-                        # 直接返回原始二进制数据，不尝试处理
                         return part.inline_data.data
-                        
-                        # 如果上面的方法在某些情况下仍然有问题，可以尝试以下备选方案：
-                        # 1. 保存为临时文件再读取
-                        # temp_path = TmpDir().path() + "gemini_temp_" + str(uuid.uuid4()) + ".raw"
-                        # with open(temp_path, 'wb') as f:
-                        #     f.write(part.inline_data.data)
-                        # with open(temp_path, 'rb') as f:
-                        #     return f.read()
             
             logger.error("[stability] No image data in Gemini response")
             return None
