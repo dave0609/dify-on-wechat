@@ -84,7 +84,6 @@ class stability(Plugin):
             # 初始化Google Gemini客户端
             if self.google_key:
                 try:
-                    genai.configure(api_key=self.google_key)
                     self.gemini_client = genai.Client(api_key=self.google_key)
                     logger.info("[stability] Google Gemini client initialized.")
                 except Exception as e:
