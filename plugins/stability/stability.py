@@ -21,6 +21,9 @@ import requests
 import translators as ts
 from google import genai
 from google.genai import types
+import base64
+import PIL.Image
+from io import BytesIO
 
 @plugins.register(
     name="stability",
