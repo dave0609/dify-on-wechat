@@ -1104,6 +1104,7 @@ class stability(Plugin):
                 return "IMAGE_SAFETY_ERROR"
                 
             # 检查响应并提取图像数据
+            has_image_data = False
             if (hasattr(response, 'candidates') and response.candidates and 
                 response.candidates[0].content is not None and 
                 hasattr(response.candidates[0].content, 'parts')):
@@ -1112,9 +1113,14 @@ class stability(Plugin):
                         continue
                     elif part.inline_data is not None:
                         logger.info("[stability] Successfully received image data from Gemini")
+                        has_image_data = True
                         return part.inline_data.data
             
-            logger.error("[stability] No image data in Gemini response")
+            # 如果没有图像数据，也视为安全检查问题
+            if not has_image_data:
+                logger.error("[stability] No image data in Gemini response")
+                return "IMAGE_SAFETY_ERROR"
+                
             return None
         except Exception as e:
             logger.error(f"[stability] Error editing image with Gemini: {e}")
