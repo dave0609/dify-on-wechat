@@ -119,52 +119,6 @@ class falclient(Plugin):
         """Check if the file exists and is greater than a given minimum size in bytes."""
         return os.path.exists(file_path) and os.path.getsize(file_path) > min_size
 
-    def call_kling_service(self, image_path, user_id, e_context, is_high_quality=False):
-        logger.info("call_kling_service")
-        if image_path:
-            prompt = self.params_cache[user_id]['img_prompt'] if not is_high_quality else self.params_cache[user_id]['hd_img_prompt']
-        else:
-            prompt = self.params_cache[user_id]['text_prompt'] if not is_high_quality else self.params_cache[user_id]['hd_text_prompt']
-
-        output_dir = self.generate_unique_output_directory(TmpDir().path())
-        logger.info(f"output dir = {output_dir}")
-
-        tip = '欢迎光临神奇的视频制造厂！🎥✨ 放松，倒一杯咖啡☕️，伸个懒腰🧘‍♂️。让我们的小精灵们为你打造专属视频。稍坐片刻，2-5分钟后，您的视频即将呈现！🎬✨'
-        self.send_reply(tip, e_context)
-
-        try:
-            v = VideoGen(self.cookie)  # Replace 'cookie', image_url with your own
-            if not image_path:
-                v.save_video(prompt, output_dir,is_high_quality=is_high_quality)
-            else:
-                v.save_video(prompt, output_dir, image_path,is_high_quality=is_high_quality)
-        except Exception as e:
-            logger.error("call kling api error: {}".format(e))
-            rt = ReplyType.TEXT
-            rc = f"服务暂不可用,错误信息: {e}"
-            reply = Reply(rt, rc)
-            e_context["reply"] = reply
-            e_context.action = EventAction.BREAK_PASS
-            return
-
-        # 查找 output_dir 中的 mp3 和 mp4 文件
-        mp4_files = glob(os.path.join(output_dir, '*.mp4'))
-        for file_path in mp4_files:
-            if self.is_valid_file(file_path):
-                logger.info(f"File {file_path} is valid.")
-                newfilepath = self.rename_file(file_path, prompt)
-                rt = ReplyType.VIDEO
-                rc = newfilepath
-                self.send_reply(rc, e_context, rt)
-            else:
-                logger.info(f"File {file_path} is invalid or incomplete.")
-                rt = ReplyType.TEXT
-                rc = "视频生成失败，请稍后再试"
-                e_context["reply"] = reply
-                break  # 如果某个文件无效，则跳出循环
-
-        e_context.action = EventAction.BREAK_PASS
-
     def call_fal_service(self, prompt: str, e_context: EventContext):
         try:
             # 设置 API 密钥
