@@ -139,20 +139,19 @@ class falclient(Plugin):
             response = requests.post(url, headers=headers, json=data)
             result = response.json()
             
-            if 'videos' in result:
+            if 'video' in result:
                 output_dir = self.generate_unique_output_directory(TmpDir().path())
 
-                for video in result['videos']:
-                    video_url = video['url']                    
-                    # 构建视频文件路径
-                    video_path = os.path.join(output_dir, f"kling_{uuid.uuid4()}.mp4")
-                    
-                    # 下载视频
-                    video_response = requests.get(video_url)
-                    with open(video_path, 'wb') as f:
-                        f.write(video_response.content)
-                    
-                    self.send_reply(video_path, e_context, ReplyType.FILE)
+                video_url = result['video']['url']                    
+                # 构建视频文件路径
+                video_path = os.path.join(output_dir, f"kling_{uuid.uuid4()}.mp4")
+                
+                # 下载视频
+                video_response = requests.get(video_url)
+                with open(video_path, 'wb') as f:
+                    f.write(video_response.content)
+                
+                self.send_reply(video_path, e_context, ReplyType.FILE)
                 
                 # 发送完成提示
                 rt = ReplyType.TEXT
@@ -161,11 +160,20 @@ class falclient(Plugin):
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
             else:
-                self.send_reply("视频生成失败，请稍后重试", e_context)
+                rc="视频生成失败，请稍后重试"
+                rt = ReplyType.TEXT
+                reply = Reply(rt, rc)
+                logger.error("[fal client ] service exception")
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
                 
         except Exception as e:
-            logger.error(f"fal client service error: {e}")
-            self.send_reply(f"服务暂不可用，错误信息: {e}", e_context)
+            rc= "服务暂不可用"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            logger.error("[fal client ] service exception")
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
         
     def send_reply(self, reply, e_context: EventContext, reply_type=ReplyType.TEXT):
         if isinstance(reply, Reply):
