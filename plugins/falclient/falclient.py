@@ -151,7 +151,7 @@ class falclient(Plugin):
                 with open(video_path, 'wb') as f:
                     f.write(video_response.content)
                 
-                self.send_reply(video_path, e_context, ReplyType.FILE)
+                self.send_reply(video_path, e_context, ReplyType.VIDEO)
                 
                 # 发送完成提示
                 rt = ReplyType.TEXT
