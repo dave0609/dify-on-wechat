@@ -77,7 +77,7 @@ class falclient(Plugin):
                 match = re.match(pattern, content)
                 if match:  # 匹配上了kling的指令
                     text_prompt = content[len(self.fal_kling_text_prefix):].strip()
-                    self.call_fal_service(None, text_prompt, e_context)
+                    self.call_fal_service(text_prompt, e_context)
                 else:
                     tip = f"💡欢迎使用kling文字生成视频服务，指令格式为:\n\n{self.fal_kling_text_prefix} + 对视频的描述\n例如：{self.fal_kling_text_prefix} a girl is walking in the street."
                     reply = Reply(type=ReplyType.TEXT, content=tip)
