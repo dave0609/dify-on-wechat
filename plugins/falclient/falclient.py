@@ -12,11 +12,9 @@ import asyncio  # 新增导入
 import fal_client  # 新增导入
 import requests 
 import os
-from kling import VideoGen
 import os
 import uuid
 from glob import glob
-import translators as ts
 
 
 @plugins.register(
