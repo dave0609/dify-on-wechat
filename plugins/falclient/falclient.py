@@ -142,46 +142,44 @@ class falclient(Plugin):
             tip = '您的视频请求已经进入队列，大概需要5-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
             self.send_reply(tip, e_context)
             
-            # 使用 REST API 上传图片
-            upload_url = "https://fal.run/storage/upload"
-            headers = {
-                "Authorization": f"Key {api_key}"
-            }
+            # 创建 fal_client 实例
+            client = fal_client.SyncClient(key=api_key)
             
-            # 上传图片文件
-            with open(image_path, 'rb') as f:
-                files = {'file': f}
-                upload_response = requests.post(upload_url, headers=headers, files=files)
-            
-            if upload_response.status_code != 200:
-                raise Exception(f"图片上传失败: {upload_response.text}")
-                
-            # 获取上传后的图片URL
-            image_url = upload_response.json().get('url')
-            if not image_url:
-                raise Exception("无法获取上传图片的URL")
-                
+            # 上传图片获取URL
+            logger.info(f"开始上传图片: {image_path}")
+            image_url = client.upload_file(image_path)
             logger.info(f"图片上传成功，URL: {image_url}")
             
             # 使用图片URL生成视频
-            url = f"https://fal.run/fal-ai/{self.fal_kling_img_model}"
-            headers = {
-                "Authorization": f"Key {api_key}",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "prompt": prompt,
-                "image_url": image_url
-            }
+            logger.info(f"开始使用图片URL生成视频，提示词: {prompt}")
             
-            # 发送同步请求
-            response = requests.post(url, headers=headers, json=data)
-            result = response.json()
+            # 定义回调函数来处理队列更新
+            def on_queue_update(update):
+                if isinstance(update, fal_client.InProgress):
+                    for log in update.logs:
+                        logger.info(f"处理日志: {log['message']}")
+                elif isinstance(update, fal_client.Queued):
+                    logger.info(f"请求已排队，位置: {update.position}")
             
-            if 'video' in result:
+            # 使用subscribe方法提交请求并等待结果
+            result = client.subscribe(
+                f"fal-ai/{self.fal_kling_img_model}",
+                arguments={
+                    "prompt": prompt,
+                    "image_url": image_url
+                },
+                with_logs=True,
+                on_queue_update=on_queue_update
+            )
+            
+            logger.info(f"视频生成响应: {json.dumps(result, ensure_ascii=False)}")
+            
+            # 从结果中提取视频URL
+            video_url = result.get("video", {}).get("url")
+            
+            if video_url:
                 output_dir = self.generate_unique_output_directory(TmpDir().path())
                 
-                video_url = result['video']['url']
                 # 构建视频文件路径
                 video_path = os.path.join(output_dir, f"kling_{uuid.uuid4()}.mp4")
                 
@@ -206,7 +204,7 @@ class falclient(Plugin):
                 rc = "视频生成失败，请稍后重试"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
-                logger.error(f"[fal client] 服务异常: {result}")
+                logger.error(f"[fal client] 未能从响应中提取视频URL: {result}")
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
                 
