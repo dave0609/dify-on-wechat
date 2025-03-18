@@ -156,10 +156,16 @@ class falclient(Plugin):
             # 定义回调函数来处理队列更新
             def on_queue_update(update):
                 if isinstance(update, fal_client.InProgress):
-                    for log in update.logs:
-                        logger.info(f"处理日志: {log['message']}")
+                    # 只记录第一条日志或状态变化
+                    if update.logs and len(update.logs) > 0:
+                        latest_log = update.logs[-1]
+                        logger.info(f"处理进度: {latest_log['message']}")
                 elif isinstance(update, fal_client.Queued):
-                    logger.info(f"请求已排队，位置: {update.position}")
+                    # 只在队列位置变化时记录
+                    static_position = getattr(on_queue_update, 'last_position', None)
+                    if static_position != update.position:
+                        logger.info(f"请求已排队，位置: {update.position}")
+                        on_queue_update.last_position = update.position
             
             # 使用subscribe方法提交请求并等待结果
             result = client.subscribe(
