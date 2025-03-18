@@ -46,7 +46,9 @@ class falclient(Plugin):
             # 从配置中提取所需的设置
 
             self.fal_kling_text_prefix = self.config.get("fal_kling_text_prefix", "文生视频")
-            self.fal_kling_text_model = self.config.get("fal_kling_text_model", "kling-video/v1.6/pro/text-to-video")
+            self.fal_kling_text_model = self.config.get("fal_kling_text_model", "kling-video/v1.6/standard/text-to-video")
+            self.fal_kling_img_prefix = self.config.get("fal_kling_img_prefix", "图生视频")
+            self.fal_kling_img_model = self.config.get("fal_kling_img_model", "kling-video/v1.6/standard/image-to-video")
             self.fal_api_key = self.config.get("fal_api_key", "")
             self.params_cache = ExpiredDict(500)
 
@@ -68,11 +70,26 @@ class falclient(Plugin):
         if user_id not in self.params_cache:
             self.params_cache[user_id] = {}
             self.params_cache[user_id]['kling_img_quota'] = 0
-            self.params_cache[user_id]['kling_img_prompt'] = None
+            self.params_cache[user_id]['fal_kling_img_prefix'] = None
             logger.debug('Added new user to params_cache. user id = ' + user_id)
 
         if e_context['context'].type == ContextType.TEXT:
-            if content.startswith(self.fal_kling_text_prefix):
+            if content.startswith(self.fal_kling_img_prefix):
+                pattern = self.fal_kling_img_prefix + r"\s(.+)"
+                match = re.match(pattern, content)
+                if match:  # 匹配上了kling的指令
+                    img_prompt = content[len(self.fal_kling_img_prefix):].strip()
+                    self.params_cache[user_id]['kling_img_prompt'] = img_prompt
+                    self.params_cache[user_id]['kling_img_quota'] = 1
+                    tip = f"💡已经开启kling图片生成视频服务，请再发送一张图片进行处理，当前的提示词为:\n{img_prompt}"
+                else:
+                    tip = f"💡欢迎使用kling图片生成视频服务，指令格式为:\n\n{self.fal_kling_img_prefix} + 对视频的描述\n例如：{self.fal_kling_img_prefix} make the picture alive."
+
+                reply = Reply(type=ReplyType.TEXT, content=tip)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+
+            elif content.startswith(self.fal_kling_text_prefix):
                 pattern = self.fal_kling_text_prefix + r"\s(.+)"
                 match = re.match(pattern, content)
                 if match:  # 匹配上了kling的指令
@@ -84,28 +101,24 @@ class falclient(Plugin):
                     e_context["reply"] = reply
                     e_context.action = EventAction.BREAK_PASS
 
-        # elif context.type == ContextType.IMAGE:
-        #     if self.params_cache[user_id]['kling_img_quota'] < 1 and self.params_cache[user_id]['kling_hd_img_quota'] < 1:
-        #         # 进行下一步的操作                
-        #         logger.debug("on_handle_context: 当前用户生成视频配额不够，不进行识别")
-        #         return
+        elif context.type == ContextType.IMAGE:
+            if self.params_cache[user_id]['kling_img_quota'] < 1:
+                # 进行下一步的操作                
+                logger.debug("on_handle_context: 当前用户生成视频配额不够，不进行识别")
+                return
 
-        #     logger.info("on_handle_context: 开始处理图片")
-        #     context.get("msg").prepare()
-        #     image_path = context.content
-        #     logger.info(f"on_handle_context: 获取到图片路径 {image_path}")
+            logger.info("on_handle_context: 开始处理图片")
+            context.get("msg").prepare()
+            image_path = context.content
+            logger.info(f"on_handle_context: 获取到图片路径 {image_path}")
 
-        #     if self.params_cache[user_id]['kling_img_quota'] > 0:
-        #         self.params_cache[user_id]['kling_img_quota'] = 0
-        #         self.call_kling_service(image_path, user_id, e_context)
+            if self.params_cache[user_id]['kling_img_quota'] > 0:
+                self.params_cache[user_id]['kling_img_quota'] = 0
+                self.call_kling_service(image_path, user_id, e_context)
 
-        #     elif self.params_cache[user_id]['kling_hd_img_quota'] > 0:
-        #         self.params_cache[user_id]['kling_hd_img_quota'] = 0
-        #         self.call_kling_service(image_path, user_id, e_context, is_high_quality=True)
-
-        #     # 删除文件
-        #     os.remove(image_path)
-        #     logger.info(f"文件 {image_path} 已删除")
+            # 删除文件
+            os.remove(image_path)
+            logger.info(f"文件 {image_path} 已删除")
     
     def generate_unique_output_directory(self, base_dir):
         """Generate a unique output directory using a UUID."""
@@ -117,12 +130,101 @@ class falclient(Plugin):
         """Check if the file exists and is greater than a given minimum size in bytes."""
         return os.path.exists(file_path) and os.path.getsize(file_path) > min_size
 
+
+    def call_kling_service(self, image_path, user_id, e_context):
+        try:
+            # 设置 API 密钥
+            api_key = self.fal_api_key
+            
+            # 获取用户的提示词
+            prompt = self.params_cache[user_id].get('kling_img_prompt', '')
+            
+            tip = '您的视频请求已经进入队列，大概需要5-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
+            self.send_reply(tip, e_context)
+            
+            # 使用 REST API 上传图片
+            upload_url = "https://fal.run/storage/upload"
+            headers = {
+                "Authorization": f"Key {api_key}"
+            }
+            
+            # 上传图片文件
+            with open(image_path, 'rb') as f:
+                files = {'file': f}
+                upload_response = requests.post(upload_url, headers=headers, files=files)
+            
+            if upload_response.status_code != 200:
+                raise Exception(f"图片上传失败: {upload_response.text}")
+                
+            # 获取上传后的图片URL
+            image_url = upload_response.json().get('url')
+            if not image_url:
+                raise Exception("无法获取上传图片的URL")
+                
+            logger.info(f"图片上传成功，URL: {image_url}")
+            
+            # 使用图片URL生成视频
+            url = f"https://fal.run/fal-ai/{self.fal_kling_img_model}"
+            headers = {
+                "Authorization": f"Key {api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "prompt": prompt,
+                "image_url": image_url
+            }
+            
+            # 发送同步请求
+            response = requests.post(url, headers=headers, json=data)
+            result = response.json()
+            
+            if 'video' in result:
+                output_dir = self.generate_unique_output_directory(TmpDir().path())
+                
+                video_url = result['video']['url']
+                # 构建视频文件路径
+                video_path = os.path.join(output_dir, f"kling_{uuid.uuid4()}.mp4")
+                
+                # 下载视频
+                video_response = requests.get(video_url)
+                with open(video_path, 'wb') as f:
+                    f.write(video_response.content)
+                
+                # 重命名文件（可选）
+                if prompt:
+                    video_path = self.rename_file(video_path, prompt)
+                
+                self.send_reply(video_path, e_context, ReplyType.VIDEO)
+                
+                # 发送完成提示
+                rt = ReplyType.TEXT
+                rc = "可灵视频生成完毕。"
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+            else:
+                rc = "视频生成失败，请稍后重试"
+                rt = ReplyType.TEXT
+                reply = Reply(rt, rc)
+                logger.error(f"[fal client] 服务异常: {result}")
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+                
+        except Exception as e:
+            rc = f"服务暂不可用: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            logger.error(f"[fal client] 服务异常: {e}")
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+
+
     def call_fal_service(self, prompt: str, e_context: EventContext):
         try:
             # 设置 API 密钥
             api_key = self.fal_api_key
             
-            tip = '欢迎光临神奇的视频制造厂！🎥✨ 放松，倒一杯咖啡☕️，伸个懒腰🧘‍♂️。让我们的小精灵们为你打造专属视频。稍坐片刻，2-5分钟后，您的视频即将呈现！🎬✨'
+            tip = '您的视频请求已经进入队列，大概需要5-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
             self.send_reply(tip, e_context)
 
             # 使用 REST API 发送请求
