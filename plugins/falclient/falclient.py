@@ -188,10 +188,6 @@ class falclient(Plugin):
                 with open(video_path, 'wb') as f:
                     f.write(video_response.content)
                 
-                # 重命名文件（可选）
-                if prompt:
-                    video_path = self.rename_file(video_path, prompt)
-                
                 self.send_reply(video_path, e_context, ReplyType.VIDEO)
                 
                 # 发送完成提示
