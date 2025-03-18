@@ -174,7 +174,7 @@ class falclient(Plugin):
                     "prompt": prompt,
                     "image_url": image_url
                 },
-                with_logs=True,
+                with_logs=False,
                 on_queue_update=on_queue_update
             )
             
