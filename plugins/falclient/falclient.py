@@ -139,7 +139,7 @@ class falclient(Plugin):
             # 获取用户的提示词
             prompt = self.params_cache[user_id].get('kling_img_prompt', '')
             
-            tip = '您的视频请求已经进入队列，大概需要5-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
+            tip = '您的视频请求已经进入队列，大概需要3-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
             self.send_reply(tip, e_context)
             
             # 创建 fal_client 实例
@@ -224,7 +224,7 @@ class falclient(Plugin):
             # 设置 API 密钥
             api_key = self.fal_api_key
             
-            tip = '您的视频请求已经进入队列，大概需要5-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
+            tip = '您的视频请求已经进入队列，大概需要3-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
             self.send_reply(tip, e_context)
 
             # 使用 REST API 发送请求
