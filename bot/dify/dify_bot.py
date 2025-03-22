@@ -242,39 +242,50 @@ class DifyBot(Bot):
             failover_api_key = conf().get("failover_api_key", conf().get("open_ai_api_key"))
             failover_api_base = conf().get("failover_api_base", conf().get("open_ai_api_base"))
             
-            # 设置OpenAI配置
-            openai.api_key = failover_api_key
-            if failover_api_base:
-                openai.api_base = failover_api_base
-            proxy = conf().get("proxy")
-            if proxy:
-                openai.proxy = proxy
-                
-            logger.info(f"[DIFY] Failover using API base: {openai.api_base}")
+            # 保存原始的API配置
+            original_api_key = openai.api_key
+            original_api_base = openai.api_base
             
-            # 创建ChatGPTBot实例
-            failover_bot = ChatGPTBot()
-            
-            # 使用配置中的failover_model
-            failover_model = conf().get("failover_model", "gpt-3.5-turbo")
-            
-            # 创建新的上下文，正确复制原始context的所有属性
-            failover_context = Context(type=ContextType.TEXT)
-            
-            # 如果原始context存在，复制其content和kwargs
-            if context:
-                failover_context.content = context.content
-                for key, value in context.kwargs.items():
-                    failover_context[key] = value
+            try:
+                # 设置OpenAI配置
+                openai.api_key = failover_api_key
+                if failover_api_base:
+                    openai.api_base = failover_api_base
+                proxy = conf().get("proxy")
+                if proxy:
+                    openai.proxy = proxy
                     
-            # 设置gpt_model
-            failover_context["gpt_model"] = failover_model
-            
-            # 使用ChatGPTBot处理请求
-            reply = failover_bot.reply(query, failover_context)
-            
-            logger.info(f"[DIFY] Failover successful using model: {failover_model}")
-            return reply, None
+                logger.info(f"[DIFY] Failover using API base: {openai.api_base}")
+                
+                # 创建ChatGPTBot实例
+                failover_bot = ChatGPTBot()
+                
+                # 使用配置中的failover_model
+                failover_model = conf().get("failover_model", "gpt-3.5-turbo")
+                
+                # 创建新的上下文，正确复制原始context的所有属性
+                failover_context = Context(type=ContextType.TEXT)
+                
+                # 如果原始context存在，复制其content和kwargs
+                if context:
+                    failover_context.content = context.content
+                    for key, value in context.kwargs.items():
+                        failover_context[key] = value
+                        
+                # 设置gpt_model和API密钥
+                failover_context["gpt_model"] = failover_model
+                failover_context["openai_api_key"] = failover_api_key
+                
+                # 使用ChatGPTBot处理请求
+                reply = failover_bot.reply(query, failover_context)
+                
+                logger.info(f"[DIFY] Failover successful using model: {failover_model}")
+                return reply, None
+            finally:
+                # 恢复原始的API配置
+                openai.api_key = original_api_key
+                openai.api_base = original_api_base
+                
         except Exception as failover_e:
             # 如果故障转移也失败，记录错误并返回原始错误
             logger.exception(f"[DIFY] Failover failed: {failover_e}")
