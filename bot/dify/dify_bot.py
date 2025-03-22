@@ -255,7 +255,7 @@ class DifyBot(Bot):
                 if proxy:
                     openai.proxy = proxy
                     
-                logger.info(f"[DIFY] Failover using API base: {openai.api_base}")
+                logger.info(f"[DIFY] Failover using API base: {openai.api_base} with key: {failover_api_key[:3]}...{failover_api_key[-3:]}")
                 
                 # 创建ChatGPTBot实例
                 failover_bot = ChatGPTBot()
@@ -274,6 +274,7 @@ class DifyBot(Bot):
                         
                 # 设置gpt_model和API密钥
                 failover_context["gpt_model"] = failover_model
+                # 明确设置openai_api_key，这样在ChatGPTBot.reply_text中会使用这个值
                 failover_context["openai_api_key"] = failover_api_key
                 
                 # 使用ChatGPTBot处理请求
