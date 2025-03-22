@@ -82,9 +82,6 @@ class ChatGPTBot(Bot, OpenAIImage, OpenAIVision):
             if model:
                 new_args = self.args.copy()
                 new_args["model"] = model
-            # if context.get('stream'):
-            #     # reply in stream
-            #     return self.reply_text_stream(query, new_query, session_id)
 
             reply_content = self.reply_text(session_id, session, api_key, args=new_args)
             logger.debug(

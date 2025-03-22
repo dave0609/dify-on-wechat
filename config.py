@@ -108,6 +108,8 @@ available_setting = {
     "dify_conversation_max_messages": 5, # dify目前不支持设置历史消息长度，暂时使用超过最大消息数清空会话的策略，缺点是没有滑动窗口，会突然丢失历史消息，当设置的值小于等于0，则不限制历史消息长度
     "dify_error_reply": "", # dify bot错误时给用户的回复
     "failover_model": "gpt-3.5-turbo", # dify bot错误时使用的备用模型
+    "failover_api_key": "", # dify bot错误时使用的备用API密钥，如果为空则使用open_ai_api_key
+    "failover_api_base": "", # dify bot错误时使用的备用API基础URL，如果为空则使用open_ai_api_base
     "deepsearch_model": "sonar-deep-research", # dify bot深度搜索使用的模型 
 
     # coze配置

@@ -238,10 +238,14 @@ class DifyBot(Bot):
             import openai
             from bot.chatgpt.chat_gpt_bot import ChatGPTBot
             
-            # 确保从config中重新读取API配置
-            openai.api_key = conf().get("open_ai_api_key")
-            if conf().get("open_ai_api_base"):
-                openai.api_base = conf().get("open_ai_api_base")
+            # 使用专门的故障转移API配置
+            failover_api_key = conf().get("failover_api_key", conf().get("open_ai_api_key"))
+            failover_api_base = conf().get("failover_api_base", conf().get("open_ai_api_base"))
+            
+            # 设置OpenAI配置
+            openai.api_key = failover_api_key
+            if failover_api_base:
+                openai.api_base = failover_api_base
             proxy = conf().get("proxy")
             if proxy:
                 openai.proxy = proxy
