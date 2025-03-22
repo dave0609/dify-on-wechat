@@ -247,7 +247,7 @@ class DifyBot(Bot):
             original_api_base = openai.api_base
             
             try:
-                # 设置OpenAI配置
+                # 设置OpenAI配置 - 这会影响全局配置
                 openai.api_key = failover_api_key
                 if failover_api_base:
                     openai.api_base = failover_api_base
@@ -272,10 +272,8 @@ class DifyBot(Bot):
                     for key, value in context.kwargs.items():
                         failover_context[key] = value
                         
-                # 设置gpt_model和API密钥
+                # 设置gpt_model
                 failover_context["gpt_model"] = failover_model
-                # 明确设置openai_api_key，这样在ChatGPTBot.reply_text中会使用这个值
-                failover_context["openai_api_key"] = failover_api_key
                 
                 # 使用ChatGPTBot处理请求
                 reply = failover_bot.reply(query, failover_context)
@@ -286,7 +284,7 @@ class DifyBot(Bot):
                 # 恢复原始的API配置
                 openai.api_key = original_api_key
                 openai.api_base = original_api_base
-                
+                    
         except Exception as failover_e:
             # 如果故障转移也失败，记录错误并返回原始错误
             logger.exception(f"[DIFY] Failover failed: {failover_e}")
