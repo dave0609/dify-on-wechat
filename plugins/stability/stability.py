@@ -440,100 +440,97 @@ class stability(Plugin):
                 logger.error(traceback.format_exc())
 
     def call_image_edit_service(self, image_path, user_id, e_context):
-            """使用OpenAI的GPT-4o进行图片编辑"""
-            logger.info(f"calling image edit service with GPT-4o")
+        """使用OpenAI的GPT-4o进行图片编辑"""
+        logger.info(f"calling image edit service with GPT-4o")
+        
+        if not self.openai_api_key or not self.openai_base_url:
+            rc = "OpenAI API配置不完整，请在配置文件中设置open_ai_api_key和open_ai_api_base"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+            return
             
-            if not self.openai_api_key or not self.openai_base_url:
-                rc = "OpenAI API配置不完整，请在配置文件中设置openai_api_key和openai_base_url"
-                rt = ReplyType.TEXT
-                reply = Reply(rt, rc)
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            edit_prompt = self.params_cache[user_id]['image_edit_prompt']
+        edit_prompt = self.params_cache[user_id]['image_edit_prompt']
+        
+        try:
+            import openai
+            import base64
             
-            try:
-                from openai import OpenAI
-                import base64
-                
-                # 初始化OpenAI客户端
-                client = OpenAI(
-                    api_key=self.openai_api_key,
-                    base_url=self.openai_base_url
-                )
-                
-                # 读取并编码图像
-                with open(image_path, "rb") as image_file:
-                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-                
-                # 调用GPT-4o进行图像编辑
-                response = client.chat.completions.create(
-                    model="gpt-4o-all",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": edit_prompt
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{base64_image}"
-                                    }
+            # 配置OpenAI API
+            openai.api_key = self.openai_api_key
+            openai.api_base = self.openai_base_url
+            
+            # 读取并编码图像
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            # 调用GPT-4o进行图像编辑
+            response = openai.ChatCompletion.create(
+                model="gpt-4o-all",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": edit_prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
                                 }
-                            ]
-                        }
-                    ],
-                    stream=False
-                )
+                            }
+                        ]
+                    }
+                ]
+            )
+            
+            # 从响应中提取图片URL
+            content = response.choices[0].message.content
+            image_url = self.extract_image_url(content)
+            
+            if image_url:
+                logger.info(f"生成的图像URL: {image_url}")
                 
-                # 从响应中提取图片URL
-                content = response.choices[0].message.content
-                image_url = self.extract_image_url(content)
+                # 下载编辑后的图像
+                image_data = requests.get(image_url).content
+                imgpath = TmpDir().path() + "edited_" + str(uuid.uuid4()) + ".png"
                 
-                if image_url:
-                    logger.info(f"生成的图像URL: {image_url}")
-                    
-                    # 下载编辑后的图像
-                    image_data = requests.get(image_url).content
-                    imgpath = TmpDir().path() + "edited_" + str(uuid.uuid4()) + ".png"
-                    
-                    with open(imgpath, 'wb') as file:
-                        file.write(image_data)
-                    
-                    # 发送编辑后的图像
-                    rt = ReplyType.IMAGE
-                    image = self.img_to_png(imgpath)
-                    
-                    if image is False:
-                        rc = "处理图片失败"
-                        rt = ReplyType.TEXT
-                    else:
-                        rc = image
-                    
-                    reply = Reply(rt, rc)
-                    e_context["reply"] = reply
-                    e_context.action = EventAction.BREAK_PASS
-                else:
-                    rc = "无法从响应中提取图像URL，请尝试其他提示词或图片"
+                with open(imgpath, 'wb') as file:
+                    file.write(image_data)
+                
+                # 发送编辑后的图像
+                rt = ReplyType.IMAGE
+                image = self.img_to_png(imgpath)
+                
+                if image is False:
+                    rc = "处理图片失败"
                     rt = ReplyType.TEXT
-                    reply = Reply(rt, rc)
-                    e_context["reply"] = reply
-                    e_context.action = EventAction.BREAK_PASS
-                    
-            except Exception as e:
-                logger.error(f"[stability] Image edit service exception: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
+                else:
+                    rc = image
                 
-                rc = f"图片编辑服务出错: {str(e)}"
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+            else:
+                rc = "无法从响应中提取图像URL，请尝试其他提示词或图片"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
+                
+        except Exception as e:
+            logger.error(f"[stability] Image edit service exception: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            rc = f"图片编辑服务出错: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
     
     def extract_image_url(self, content):
         """从响应内容中提取图像URL"""
