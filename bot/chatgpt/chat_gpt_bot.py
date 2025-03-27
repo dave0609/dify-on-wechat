@@ -255,7 +255,7 @@ class AzureChatGPTBot(ChatGPTBot):
             except Exception as e:
                 logger.error("create image error: {}".format(e))
                 return False, "图片生成失败"
-        elif text_to_image_model == "dall-e-3":
+        elif text_to_image_model == "dall-e-3" or text_to_image_model.startswith("gpt-4o"):
             api_version = conf().get("azure_api_version", "2024-02-15-preview")
             endpoint = conf().get("azure_openai_dalle_api_base","open_ai_api_base")
             # 检查endpoint是否以/结尾
