@@ -82,8 +82,8 @@ class stability(Plugin):
             self.total_timeout = self.config.get("total_timeout", 5)
             self.google_key = self.config.get("google_key", "")
             self.image_edit_prefix = self.config.get("image_edit_prefix", "垫图")
-            self.openai_api_key = self.config.get("openai_api_key", "")
-            self.openai_base_url = self.config.get("openai_base_url", "")
+            self.openai_api_key = self.config.get("open_ai_api_key", "")
+            self.openai_base_url = self.config.get("open_ai_api_base", "")
             self.params_cache = ExpiredDict(500)
             
             # 初始化Google Gemini客户端
