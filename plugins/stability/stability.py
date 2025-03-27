@@ -81,7 +81,9 @@ class stability(Plugin):
             self.jimeng_url = self.config.get("jimeng_url", "")
             self.total_timeout = self.config.get("total_timeout", 5)
             self.google_key = self.config.get("google_key", "")
-
+            self.image_edit_prefix = self.config.get("image_edit_prefix", "垫图")
+            self.openai_api_key = self.config.get("openai_api_key", "")
+            self.openai_base_url = self.config.get("openai_base_url", "")
             self.params_cache = ExpiredDict(500)
             
             # 初始化Google Gemini客户端
@@ -122,6 +124,9 @@ class stability(Plugin):
             self.params_cache[user_id]['rmbg_quota'] = 0
             self.params_cache[user_id]['outpaint_quota'] = 0
             self.params_cache[user_id]['erase_quota'] = 0
+            self.params_cache[user_id]['image_edit_quota'] = 0
+            self.params_cache[user_id]['image_edit_prompt'] = None
+
 
             logger.debug('Added new user to params_cache. user id = ' + user_id)
 
@@ -268,6 +273,23 @@ class stability(Plugin):
                     reply = Reply(type=ReplyType.TEXT, content= tip)
                     e_context["reply"] = reply
                     e_context.action = EventAction.BREAK_PASS
+            elif content.startswith(self.image_edit_prefix):
+                pattern = self.image_edit_prefix + r"\s(.+)"
+                match = re.match(pattern, content)
+                if match:  # 匹配上了垫图的指令
+                    edit_prompt = match.group(1).strip()  # 截取后面的描述作为edit的prompt
+                    logger.info(f"image_edit_prompt={edit_prompt}")
+                    
+                    # 存储到用户缓存中
+                    self.params_cache[user_id]['image_edit_prompt'] = edit_prompt
+                    self.params_cache[user_id]['image_edit_quota'] = 1
+                    tip = f"💡已经开启垫图服务，请再发送一张图片进行处理"
+                else:
+                    tip = f"💡欢迎使用gpt-4o图片编辑功能，指令格式为:\n\n{self.image_edit_prefix}+ 空格 + 要编辑的提示词\n例如：{self.image_edit_prefix} 把图片变成吉卜力风格"
+
+                reply = Reply(type=ReplyType.TEXT, content= tip)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
 
         elif context.type == ContextType.IMAGE:
             if (self.params_cache[user_id]['inpaint_quota'] < 1 and 
@@ -276,7 +298,9 @@ class stability(Plugin):
                 self.params_cache[user_id]['doodle_quota'] < 1 and 
                 self.params_cache[user_id]['rmbg_quota'] < 1 and 
                 self.params_cache[user_id]['outpaint_quota'] < 1 and
-                self.params_cache[user_id]['erase_quota'] < 1):
+                self.params_cache[user_id]['erase_quota'] < 1 and
+                self.params_cache[user_id]['image_edit_quota'] < 1):
+
                 # 进行下一步的操作                
                 logger.debug("on_handle_context: 当前用户识图配额不够，不进行识别")
                 return
@@ -314,6 +338,9 @@ class stability(Plugin):
                 self.params_cache[user_id]['outpaint_quota'] = 0
                 self.call_outpaint_service(image_path, user_id, e_context)
 
+            if self.params_cache[user_id]['image_edit_quota'] > 0:
+                self.params_cache[user_id]['image_edit_quota'] = 0
+                self.call_image_edit_service(image_path, user_id, e_context)
             # 删除文件
             os.remove(image_path)
             logger.info(f"文件 {image_path} 已删除")
@@ -411,6 +438,118 @@ class stability(Plugin):
                 logger.error(f"[stability] Gemini edit failed: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
+
+    def call_image_edit_service(self, image_path, user_id, e_context):
+            """使用OpenAI的GPT-4o进行图片编辑"""
+            logger.info(f"calling image edit service with GPT-4o")
+            
+            if not self.openai_api_key or not self.openai_base_url:
+                rc = "OpenAI API配置不完整，请在配置文件中设置openai_api_key和openai_base_url"
+                rt = ReplyType.TEXT
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+                return
+                
+            edit_prompt = self.params_cache[user_id]['image_edit_prompt']
+            
+            try:
+                from openai import OpenAI
+                import base64
+                
+                # 初始化OpenAI客户端
+                client = OpenAI(
+                    api_key=self.openai_api_key,
+                    base_url=self.openai_base_url
+                )
+                
+                # 读取并编码图像
+                with open(image_path, "rb") as image_file:
+                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                
+                # 调用GPT-4o进行图像编辑
+                response = client.chat.completions.create(
+                    model="gpt-4o-all",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": edit_prompt
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    stream=False
+                )
+                
+                # 从响应中提取图片URL
+                content = response.choices[0].message.content
+                image_url = self.extract_image_url(content)
+                
+                if image_url:
+                    logger.info(f"生成的图像URL: {image_url}")
+                    
+                    # 下载编辑后的图像
+                    image_data = requests.get(image_url).content
+                    imgpath = TmpDir().path() + "edited_" + str(uuid.uuid4()) + ".png"
+                    
+                    with open(imgpath, 'wb') as file:
+                        file.write(image_data)
+                    
+                    # 发送编辑后的图像
+                    rt = ReplyType.IMAGE
+                    image = self.img_to_png(imgpath)
+                    
+                    if image is False:
+                        rc = "处理图片失败"
+                        rt = ReplyType.TEXT
+                    else:
+                        rc = image
+                    
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+                else:
+                    rc = "无法从响应中提取图像URL，请尝试其他提示词或图片"
+                    rt = ReplyType.TEXT
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+                    
+            except Exception as e:
+                logger.error(f"[stability] Image edit service exception: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                
+                rc = f"图片编辑服务出错: {str(e)}"
+                rt = ReplyType.TEXT
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+    
+    def extract_image_url(self, content):
+        """从响应内容中提取图像URL"""
+        # 使用正则表达式查找图片URL
+        url_pattern = r"!\[.*?\]\((https?://[^\s)]+)\)"
+        match = re.search(url_pattern, content)
+        if match:
+            return match.group(1)
+        
+        # 尝试另一种格式
+        url_pattern = r"https?://[^\s)\"']+"
+        match = re.search(url_pattern, content)
+        if match:
+            return match.group(0)
+        
+        return None
 
     def handle_stability(self, image_path, user_id, e_context):
         logger.info(f"handle_stability")
