@@ -275,58 +275,84 @@ class DifyBot(Bot):
             logger.info("[DIFY] Failover to ChatGPTBot")
             import openai
             from bot.chatgpt.chat_gpt_bot import ChatGPTBot
-            
+
+            # 先创建实例 (它会读取一次默认配置，没关系)
+            failover_bot = ChatGPTBot()
+
             # 使用专门的故障转移API配置
             failover_api_key = conf().get("failover_api_key", conf().get("open_ai_api_key"))
             failover_api_base = conf().get("failover_api_base", conf().get("open_ai_api_base"))
-            
+
             # 保存原始的API配置
             original_api_key = openai.api_key
             original_api_base = openai.api_base
-            
+            original_proxy = openai.proxy # 保存原始代理
+
             try:
-                # 设置OpenAI配置 - 这会影响全局配置
+                # 设置Failover的OpenAI配置 - 这会影响全局配置
                 openai.api_key = failover_api_key
                 if failover_api_base:
                     openai.api_base = failover_api_base
+                else:
+                     # 如果没有指定failover base，确保使用原始base或默认base
+                     openai.api_base = original_api_base if original_api_base else conf().get("open_ai_api_base")
+
+                # 对于 failover，通常应该使用全局代理设置
                 proxy = conf().get("proxy")
                 if proxy:
                     openai.proxy = proxy
-                    
+                else:
+                    openai.proxy = None # 确保如果没有配置全局代理，则清除代理设置
+
                 logger.info(f"[DIFY] Failover using API base: {openai.api_base} with key: {failover_api_key[:3]}...{failover_api_key[-3:]}")
-                
-                # 创建ChatGPTBot实例
-                failover_bot = ChatGPTBot()
-                
+                if openai.proxy:
+                     logger.info(f"[DIFY] Failover using Proxy: {openai.proxy}")
+
                 # 使用配置中的failover_model
                 failover_model = conf().get("failover_model", "gpt-3.5-turbo")
-                
+
                 # 创建新的上下文，正确复制原始context的所有属性
-                failover_context = Context(type=ContextType.TEXT)
-                
-                # 如果原始context存在，复制其content和kwargs
+                failover_context = Context(type=ContextType.TEXT, content=query) # 直接设置 content
+
+                # 显式复制必要的属性，尤其是 session_id
                 if context:
-                    failover_context.content = context.content
-                    for key, value in context.kwargs.items():
-                        failover_context[key] = value
-                        
+                    # 确保 session_id 被复制
+                    if "session_id" in context:
+                        failover_context["session_id"] = context["session_id"]
+                        logger.debug(f"[DIFY] Copied session_id to failover_context: {context['session_id']}") # 增加日志确认复制
+                    else:
+                        # 如果原始 context 确实没有 session_id，这是一个严重问题
+                        logger.error("[DIFY] Original context is missing 'session_id' in _use_failover_bot!")
+                        return None, "内部错误：缺少会话ID"
+
+                    # 复制其他可能被 chatgpt_bot.reply 使用的属性 (可选)
+                    for key in ["msg", "isgroup", "receiver"]: # 按需添加
+                        if key in context:
+                            failover_context[key] = context[key]
+                else:
+                    logger.error("[DIFY] Original context is None in _use_failover_bot!")
+                    return None, "内部错误：缺少上下文信息"
+
                 # 设置gpt_model
                 failover_context["gpt_model"] = failover_model
-                
-                # 使用ChatGPTBot处理请求
+
+                # 使用ChatGPTBot处理请求 (此时openai配置是failover的)
                 reply = failover_bot.reply(query, failover_context)
-                
+
                 logger.info(f"[DIFY] Failover successful using model: {failover_model}")
                 return reply, None
             finally:
                 # 恢复原始的API配置
                 openai.api_key = original_api_key
                 openai.api_base = original_api_base
-                    
+                openai.proxy = original_proxy # 恢复原始代理设置
+                logger.debug("[DIFY] 恢复原始OpenAI API及代理配置")
+
         except Exception as failover_e:
-            # 如果故障转移也失败，记录错误并返回原始错误
+            # 如果故障转移也失败，记录错误并返回默认错误消息
             logger.exception(f"[DIFY] Failover failed: {failover_e}")
             return None, UNKNOWN_ERROR_MSG
+
 
     def _download_file(self, url):
         try:
