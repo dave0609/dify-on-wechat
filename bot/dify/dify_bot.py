@@ -156,6 +156,7 @@ class DifyBot(Bot):
             original_proxy = openai.proxy # 保存原始代理设置
 
             try:
+                # ... (设置 deepsearch API 配置的代码保持不变) ...
                 # 获取深度搜索的特定API配置，如果未配置则使用默认OpenAI配置
                 deepsearch_api_key = conf().get("deepsearch_api_key", conf().get("open_ai_api_key"))
                 deepsearch_api_base = conf().get("deepsearch_api_base", conf().get("open_ai_api_base"))
@@ -173,19 +174,38 @@ class DifyBot(Bot):
                 if openai.proxy:
                         logger.info(f"[DIFY] DeepSearch 使用 Proxy: {openai.proxy}")
 
+                # 创建新的上下文
+                specific_context = Context(type=ContextType.TEXT, content=query) # 直接设置 content
 
-                # 创建新的上下文，正确复制原始context的所有属性
-                specific_context = Context(type=ContextType.TEXT)
-                # ... existing code ...
+                # 显式复制必要的属性，尤其是 session_id
+                if context:
+                    # 确保 session_id 被复制
+                    if "session_id" in context:
+                        specific_context["session_id"] = context["session_id"]
+                        logger.debug(f"[DIFY] Copied session_id to specific_context: {context['session_id']}") # 增加日志确认复制
+                    else:
+                         # 如果原始 context 确实没有 session_id，这是一个严重问题
+                         logger.error("[DIFY] Original context is missing 'session_id' in _use_specific_model!")
+                         return None, "内部错误：缺少会话ID"
+
+                    # 复制其他可能被 chatgpt_bot.reply 使用的属性 (可选)
+                    for key in ["msg", "isgroup", "receiver"]: # 按需添加
+                        if key in context:
+                            specific_context[key] = context[key]
+                else:
+                     logger.error("[DIFY] Original context is None in _use_specific_model!")
+                     return None, "内部错误：缺少上下文信息"
+
                 # 设置gpt_model
                 specific_context["gpt_model"] = model_name
 
-                # 使用ChatGPTBot处理请求
+                # 使用ChatGPTBot处理请求 (现在 specific_context 应该有 session_id)
                 reply = specific_bot.reply(query, specific_context)
 
                 logger.info(f"[DIFY] 使用模型 {model_name} 处理成功")
                 return reply, None
             finally:
+                # ... (恢复原始 API 配置的代码保持不变) ...
                 # 恢复原始的API配置
                 openai.api_key = original_api_key
                 openai.api_base = original_api_base
@@ -193,12 +213,12 @@ class DifyBot(Bot):
                 logger.debug("[DIFY] 恢复原始OpenAI API及代理配置")
 
         except Exception as e:
+            # ... (异常处理和 failover 代码保持不变) ...
             # 如果特定模型失败，尝试使用故障转移模型
             logger.exception(f"[DIFY] 特定模型处理失败: {e}，尝试使用故障转移模型")
             # 在调用故障转移前，确保OpenAI配置已恢复或设置为故障转移所需状态
             # (上面的 finally 块已经做了恢复，所以这里应该是安全的)
-            return self._use_failover_bot(query, context)
- 
+            return self._use_failover_bot(query, context) 
 
 
     def _handle_chatbot(self, query: str, session: DifySession, context: Context):
