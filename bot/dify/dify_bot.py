@@ -147,9 +147,13 @@ class DifyBot(Bot):
             import openai
             from bot.chatgpt.chat_gpt_bot import ChatGPTBot
 
+            # 先创建实例
+            specific_bot = ChatGPTBot()
+
             # 保存原始的API配置
             original_api_key = openai.api_key
             original_api_base = openai.api_base
+            original_proxy = openai.proxy # 保存原始代理设置
 
             try:
                 # 获取深度搜索的特定API配置，如果未配置则使用默认OpenAI配置
@@ -160,24 +164,19 @@ class DifyBot(Bot):
                 openai.api_key = deepsearch_api_key
                 if deepsearch_api_base:
                     openai.api_base = deepsearch_api_base
-                proxy = conf().get("proxy")
-                if proxy:
-                    openai.proxy = proxy
+                else:
+                    # 如果深度搜索没有指定base，确保使用原始base或默认base
+                    openai.api_base = original_api_base if original_api_base else conf().get("open_ai_api_base")
 
                 logger.info(f"[DIFY] DeepSearch 使用API Base: {openai.api_base}，Key: {openai.api_key[:3]}...{openai.api_key[-3:]}")
+                # 如果有设置代理，也打印出来
+                if openai.proxy:
+                        logger.info(f"[DIFY] DeepSearch 使用 Proxy: {openai.proxy}")
 
-                # 创建ChatGPTBot实例
-                specific_bot = ChatGPTBot()
 
                 # 创建新的上下文，正确复制原始context的所有属性
                 specific_context = Context(type=ContextType.TEXT)
-
-                # 如果原始context存在，复制其content和kwargs
-                if context:
-                    specific_context.content = context.content
-                    for key, value in context.kwargs.items():
-                        specific_context[key] = value
-
+                # ... existing code ...
                 # 设置gpt_model
                 specific_context["gpt_model"] = model_name
 
@@ -190,12 +189,16 @@ class DifyBot(Bot):
                 # 恢复原始的API配置
                 openai.api_key = original_api_key
                 openai.api_base = original_api_base
-                logger.debug("[DIFY] 恢复原始OpenAI API配置")
+                openai.proxy = original_proxy # 恢复原始代理设置
+                logger.debug("[DIFY] 恢复原始OpenAI API及代理配置")
 
         except Exception as e:
             # 如果特定模型失败，尝试使用故障转移模型
             logger.exception(f"[DIFY] 特定模型处理失败: {e}，尝试使用故障转移模型")
+            # 在调用故障转移前，确保OpenAI配置已恢复或设置为故障转移所需状态
+            # (上面的 finally 块已经做了恢复，所以这里应该是安全的)
             return self._use_failover_bot(query, context)
+ 
 
 
     def _handle_chatbot(self, query: str, session: DifySession, context: Context):
