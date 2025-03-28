@@ -146,37 +146,52 @@ class DifyBot(Bot):
             logger.info(f"[DIFY] 使用深度搜索模型处理请求: {model_name}")
             import openai
             from bot.chatgpt.chat_gpt_bot import ChatGPTBot
-            
-            # 确保从config中重新读取API配置
-            openai.api_key = conf().get("open_ai_api_key")
-            if conf().get("open_ai_api_base"):
-                openai.api_base = conf().get("open_ai_api_base")
-            proxy = conf().get("proxy")
-            if proxy:
-                openai.proxy = proxy
-                
-            logger.info(f"[DIFY] 使用API基础URL: {openai.api_base}")
-            
-            # 创建ChatGPTBot实例
-            specific_bot = ChatGPTBot()
-            
-            # 创建新的上下文，正确复制原始context的所有属性
-            specific_context = Context(type=ContextType.TEXT)
-            
-            # 如果原始context存在，复制其content和kwargs
-            if context:
-                specific_context.content = context.content
-                for key, value in context.kwargs.items():
-                    specific_context[key] = value
-                    
-            # 设置gpt_model
-            specific_context["gpt_model"] = model_name
-            
-            # 使用ChatGPTBot处理请求
-            reply = specific_bot.reply(query, specific_context)
-            
-            logger.info(f"[DIFY] 使用模型 {model_name} 处理成功")
-            return reply, None
+
+            # 保存原始的API配置
+            original_api_key = openai.api_key
+            original_api_base = openai.api_base
+
+            try:
+                # 获取深度搜索的特定API配置，如果未配置则使用默认OpenAI配置
+                deepsearch_api_key = conf().get("deepsearch_api_key", conf().get("open_ai_api_key"))
+                deepsearch_api_base = conf().get("deepsearch_api_base", conf().get("open_ai_api_base"))
+
+                # 设置OpenAI配置 - 这会影响全局配置
+                openai.api_key = deepsearch_api_key
+                if deepsearch_api_base:
+                    openai.api_base = deepsearch_api_base
+                proxy = conf().get("proxy")
+                if proxy:
+                    openai.proxy = proxy
+
+                logger.info(f"[DIFY] DeepSearch 使用API Base: {openai.api_base}，Key: {openai.api_key[:3]}...{openai.api_key[-3:]}")
+
+                # 创建ChatGPTBot实例
+                specific_bot = ChatGPTBot()
+
+                # 创建新的上下文，正确复制原始context的所有属性
+                specific_context = Context(type=ContextType.TEXT)
+
+                # 如果原始context存在，复制其content和kwargs
+                if context:
+                    specific_context.content = context.content
+                    for key, value in context.kwargs.items():
+                        specific_context[key] = value
+
+                # 设置gpt_model
+                specific_context["gpt_model"] = model_name
+
+                # 使用ChatGPTBot处理请求
+                reply = specific_bot.reply(query, specific_context)
+
+                logger.info(f"[DIFY] 使用模型 {model_name} 处理成功")
+                return reply, None
+            finally:
+                # 恢复原始的API配置
+                openai.api_key = original_api_key
+                openai.api_base = original_api_base
+                logger.debug("[DIFY] 恢复原始OpenAI API配置")
+
         except Exception as e:
             # 如果特定模型失败，尝试使用故障转移模型
             logger.exception(f"[DIFY] 特定模型处理失败: {e}，尝试使用故障转移模型")

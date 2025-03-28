@@ -111,7 +111,8 @@ available_setting = {
     "failover_api_key": "", # dify bot错误时使用的备用API密钥，如果为空则使用open_ai_api_key
     "failover_api_base": "", # dify bot错误时使用的备用API基础URL，如果为空则使用open_ai_api_base
     "deepsearch_model": "sonar-deep-research", # dify bot深度搜索使用的模型 
-
+    "deepsearch_api_key": "", # 深度搜索使用的API key，如果为空则使用open_ai_api_key
+    "deepsearch_api_base": "", # 深度搜索使用的API base，如果为空则使用open_ai_api_base
     # coze配置
     "coze_api_base": "https://api.coze.cn",
     "coze_api_key": "xxx",
