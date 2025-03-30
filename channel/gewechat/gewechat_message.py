@@ -544,7 +544,7 @@ class GeWeChatMessage(ChatMessage):
                 logger.debug(f"[gewechat] 清理后content: {self.content}")
             else:
                 logger.warning(f"[gewechat] Content is None for group message with msg_id: {self.msg_id}")
-                self.content = ""  # 设置默认值
+                self.content = "hi"  # 设置默认值
         else:
             # 如果不是群聊消息，保持结构统一，也要设置actual_user_id和actual_user_nickname
             self.actual_user_id = self.other_user_id

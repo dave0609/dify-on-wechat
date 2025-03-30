@@ -58,7 +58,7 @@ class OpenAIImage(object):
             return
         try:
             channel = context.get("channel")
-            reply = Reply(ReplyType.TEXT, f"revised_prompt:\n{revised_prompt}\n\n- - - - - - - - - - - -\n🎨 Dall-E画图：{query}")
+            reply = Reply(ReplyType.TEXT, f"revised_prompt:\n{revised_prompt}\n\n- - - - - - - - - - - -\n🎨 gpt-4o画图：{query}")
             channel.send(reply, context)
         except Exception as e:
             logger.error(e)
