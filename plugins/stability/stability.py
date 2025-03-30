@@ -515,7 +515,7 @@ class stability(Plugin):
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
             else:
-                rc = "无法从响应中提取图像URL，请尝试其他提示词或图片"
+                rc = "此绘图请求无法完成，可能是触发了版权审核，请尝试其他提示词或图片"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
