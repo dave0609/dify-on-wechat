@@ -84,6 +84,9 @@ class stability(Plugin):
             self.image_edit_prefix = self.config.get("image_edit_prefix", "垫图")
             self.openai_api_key = self.config.get("open_ai_api_key", "")
             self.openai_base_url = self.config.get("open_ai_api_base", "")
+            self.blend_prefix = self.config.get("blend_prefix","/b")
+            self.end_prefix = self.config.get("end_prefix","/e")
+
             self.params_cache = ExpiredDict(500)
             
             # 初始化Google Gemini客户端
@@ -114,6 +117,9 @@ class stability(Plugin):
         # 将用户信息存储在params_cache中
         if user_id not in self.params_cache:
             self.params_cache[user_id] = {}
+            self.params_cache[user_id]['blend_quota'] = 0 # 新增：混合图片配额
+            self.params_cache[user_id]['blend_prompt'] = None # 新增：混合图片提示词
+            self.params_cache[user_id]['blend_images'] = [] # 新增：存储混合图片路径
             self.params_cache[user_id]['inpaint_quota'] = 0
             self.params_cache[user_id]['search_prompt'] = None
             self.params_cache[user_id]['edit_prompt'] = None
@@ -131,7 +137,44 @@ class stability(Plugin):
             logger.debug('Added new user to params_cache. user id = ' + user_id)
 
         if e_context['context'].type == ContextType.TEXT:
-            if content.startswith(self.inpaint_prefix):
+            if content.startswith(self.blend_prefix): # 新增：处理 /b 指令
+                pattern = self.blend_prefix + r"\s(.+)"
+                match = re.match(pattern, content)
+                if match:
+                    blend_prompt = match.group(1).strip()
+                    logger.info(f"Blend prompt received: {blend_prompt}")
+                    # 清理之前的状态（如果存在）
+                    self.params_cache[user_id]['blend_images'] = []
+                    self.params_cache[user_id]['blend_prompt'] = blend_prompt
+                    self.params_cache[user_id]['blend_quota'] = 1 # 允许接收图片
+                    tip = f"✨ 混合图片模式已开启\n✏ 请发送至少2张图片，然后发送 '{self.end_prefix}' 结束上传并开始处理。"
+                else:
+                    tip = f"💡欢迎使用图片混合功能，指令格式为:\n\n{self.blend_prefix}+ 空格 + 图片描述\n例如：{self.blend_prefix} 把两只猫融合在一起"
+                reply = Reply(type=ReplyType.TEXT, content= tip)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+            elif content.startswith(self.end_prefix): # 新增：处理 /e 指令
+                 # 检查是否处于 blend 模式
+                if self.params_cache.get(user_id, {}).get('blend_quota', 0) == 1:
+                    blend_images = self.params_cache[user_id].get('blend_images', [])
+                    blend_prompt = self.params_cache[user_id].get('blend_prompt', "Blend the images.")
+                    if len(blend_images) >= 2:
+                        logger.info(f"Starting blend process for user {user_id} with {len(blend_images)} images.")
+                        # 调用 blend 服务
+                        self.call_blend_service(blend_images, blend_prompt, user_id, e_context)
+                        # 清理状态
+                        self.params_cache[user_id]['blend_quota'] = 0
+                        self.params_cache[user_id]['blend_prompt'] = None
+                        self.params_cache[user_id]['blend_images'] = []
+                    else:
+                        tip = f"✨ 图片混合模式\n✏ 您需要发送至少2张图片才能开始混合。当前已发送 {len(blend_images)} 张。请继续发送图片或重新开始。"
+                        reply = Reply(type=ReplyType.TEXT, content=tip)
+                        e_context["reply"] = reply
+                        e_context.action = EventAction.BREAK_PASS
+                else:
+                    # 用户不在 blend 模式，忽略 /e
+                    pass # 或者可以回复一个提示，告知用户当前不在混合模式
+            elif content.startswith(self.inpaint_prefix):
                 # 匹配上了inpaint_prefix，截取后面的描述作为edit的prompt
                 pattern = self.inpaint_prefix + r"\s(.+)"
                 match = re.match(pattern, content)
@@ -299,7 +342,8 @@ class stability(Plugin):
                 self.params_cache[user_id]['rmbg_quota'] < 1 and 
                 self.params_cache[user_id]['outpaint_quota'] < 1 and
                 self.params_cache[user_id]['erase_quota'] < 1 and
-                self.params_cache[user_id]['image_edit_quota'] < 1):
+                self.params_cache[user_id]['image_edit_quota'] < 1 and
+                self.params_cache[user_id].get('blend_quota', 0) < 1): 
 
                 # 进行下一步的操作                
                 logger.debug("on_handle_context: 当前用户识图配额不够，不进行识别")
@@ -309,7 +353,18 @@ class stability(Plugin):
             context.get("msg").prepare()
             image_path = context.content
             logger.info(f"on_handle_context: 获取到图片路径 {image_path}")
-
+# 新增：处理 blend 模式下的图片接收
+            if self.params_cache.get(user_id, {}).get('blend_quota', 0) == 1:
+                # 将图片路径添加到用户缓存
+                self.params_cache[user_id]['blend_images'].append(image_path)
+                num_images = len(self.params_cache[user_id]['blend_images'])
+                tip = f"✅ 已收到第 {num_images} 张图片。\n请继续发送图片，或发送 '{self.end_prefix}' 开始混合。"
+                reply = Reply(type=ReplyType.TEXT, content=tip)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+                # 注意：这里不删除 image_path，因为 call_blend_service 还需要它
+                return # 直接返回，不执行下面的其他图片处理逻辑
+            
             if self.params_cache[user_id]['inpaint_quota'] > 0:
                 self.params_cache[user_id]['inpaint_quota'] = 0
                 self.call_inpaint_service(image_path, user_id, e_context)
@@ -341,9 +396,147 @@ class stability(Plugin):
             if self.params_cache[user_id]['image_edit_quota'] > 0:
                 self.params_cache[user_id]['image_edit_quota'] = 0
                 self.call_image_edit_service(image_path, user_id, e_context)
-            # 删除文件
-            os.remove(image_path)
-            logger.info(f"文件 {image_path} 已删除")
+            # 删除文件（确保只有在非 blend 模式下删除）
+            if self.params_cache.get(user_id, {}).get('blend_quota', 0) != 1:
+                 try:
+                     os.remove(image_path)
+                     logger.info(f"文件 {image_path} 已删除")
+                 except Exception as e:
+                     logger.error(f"删除文件 {image_path} 失败: {e}")
+
+    def call_blend_service(self, image_paths, prompt, user_id, e_context):
+        """使用OpenAI的GPT-4o进行图片混合"""
+        logger.info(f"Calling blend service with GPT-4o for user {user_id}")
+
+        if not self.openai_api_key or not self.openai_base_url:
+            rc = "OpenAI API配置不完整，请在配置文件中设置open_ai_api_key和open_ai_api_base"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+            # 清理临时图片文件
+            for path in image_paths:
+                try:
+                    os.remove(path)
+                    logger.info(f"Blend service cleanup: 文件 {path} 已删除")
+                except Exception as e:
+                    logger.error(f"Blend service cleanup: 删除文件 {path} 失败: {e}")
+            return
+
+        try:
+            import openai # 确保导入 openai
+
+            # 配置OpenAI API
+            openai.api_key = self.openai_api_key
+            openai.api_base = self.openai_base_url
+
+            # 构建 messages 列表
+            messages_content = [{"type": "text", "text": prompt}]
+            for image_path in image_paths:
+                try:
+                    with open(image_path, "rb") as image_file:
+                        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                        messages_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                # 尝试自动判断图片类型或默认为 jpeg/png
+                                # GPT-4o 应该能处理常见的格式
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        })
+                except Exception as e:
+                    logger.error(f"读取或编码图片失败 {image_path}: {e}")
+                    # 可以选择跳过这张图片或中断处理
+                    rc = f"处理图片 {os.path.basename(image_path)} 时出错，混合失败。"
+                    rt = ReplyType.TEXT
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+                    # 清理临时图片文件
+                    for path in image_paths:
+                        try:
+                            os.remove(path)
+                        except Exception as remove_e:
+                            logger.error(f"Blend service error cleanup: 删除文件 {path} 失败: {remove_e}")
+                    return
+
+            messages = [{"role": "user", "content": messages_content}]
+
+            # 发送请求前的提示
+            tip_msg = f"⏳ 正在混合 {len(image_paths)} 张图片，请稍候..."
+            self.send_reply(tip_msg, e_context)
+
+
+            # 调用GPT-4o进行图像编辑/混合
+            response = openai.ChatCompletion.create(
+                model="gpt-4o-all", # 或者 "gpt-4o"
+                messages=messages
+                # 可以添加 max_tokens 等参数
+            )
+
+            # 从响应中提取图片URL
+            content = response.choices[0].message.content
+            image_url = self.extract_image_url(content)
+
+            if image_url:
+                logger.info(f"生成的混合图像URL: {image_url}")
+
+                # 下载编辑后的图像
+                image_data = requests.get(image_url).content
+                imgpath = TmpDir().path() + "blended_" + str(uuid.uuid4()) + ".png"
+
+                with open(imgpath, 'wb') as file:
+                    file.write(image_data)
+
+                # 发送编辑后的图像
+                rt = ReplyType.IMAGE
+                image = self.img_to_png(imgpath) # 尝试保存为 png
+
+                if image is False:
+                    rc = "处理混合图片失败"
+                    rt = ReplyType.TEXT
+                else:
+                    rc = image
+
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+            else:
+                # 检查是否有文本回复解释原因
+                if isinstance(content, str) and content.strip():
+                    rc = f"图片混合无法完成。\n原因：{content}"
+                else:
+                    rc = "此图片混合请求无法完成，可能是触发了安全审核或模型无法处理。"
+                rt = ReplyType.TEXT
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+
+        except openai.error.OpenAIError as e:
+            logger.error(f"[stability] Blend service OpenAI API error: {e}")
+            rc = f"图片混合服务API出错: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+        except Exception as e:
+            logger.error(f"[stability] Blend service exception: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+            rc = f"图片混合服务内部出错: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+        finally:
+            # 清理临时图片文件
+            for path in image_paths:
+                try:
+                    os.remove(path)
+                    logger.info(f"Blend service cleanup: 文件 {path} 已删除")
+                except Exception as e:
+                    logger.error(f"Blend service cleanup: 删除文件 {path} 失败: {e}")
 
     def call_inpaint_service(self, image_path, user_id, e_context):
         # 使用Google Gemini API编辑图片
