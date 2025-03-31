@@ -147,9 +147,9 @@ class stability(Plugin):
                     self.params_cache[user_id]['blend_images'] = []
                     self.params_cache[user_id]['blend_prompt'] = blend_prompt
                     self.params_cache[user_id]['blend_quota'] = 1 # 允许接收图片
-                    tip = f"✨ 混合图片模式已开启\n✏ 请发送至少2张图片，然后发送 '{self.end_prefix}' 结束上传并开始处理。"
+                    tip = f"✨ 多图编辑模式已开启\n✏ 请发送至少2张图片，然后发送 '{self.end_prefix}' 结束上传并开始处理。"
                 else:
-                    tip = f"💡欢迎使用图片混合功能，指令格式为:\n\n{self.blend_prefix}+ 空格 + 图片描述\n例如：{self.blend_prefix} 把两只猫融合在一起"
+                    tip = f"💡欢迎使用多图编辑功能，指令格式为:\n\n{self.blend_prefix}+ 空格 + 图片描述\n例如：{self.blend_prefix} 把两只猫融合在一起"
                 reply = Reply(type=ReplyType.TEXT, content= tip)
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
@@ -167,7 +167,7 @@ class stability(Plugin):
                         self.params_cache[user_id]['blend_prompt'] = None
                         self.params_cache[user_id]['blend_images'] = []
                     else:
-                        tip = f"✨ 图片混合模式\n✏ 您需要发送至少2张图片才能开始混合。当前已发送 {len(blend_images)} 张。请继续发送图片或重新开始。"
+                        tip = f"✨ 多图编辑模式\n✏ 您需要发送至少2张图片才能开始多图编辑。当前已发送 {len(blend_images)} 张。请继续发送图片或重新开始。"
                         reply = Reply(type=ReplyType.TEXT, content=tip)
                         e_context["reply"] = reply
                         e_context.action = EventAction.BREAK_PASS
@@ -358,7 +358,7 @@ class stability(Plugin):
                 # 将图片路径添加到用户缓存
                 self.params_cache[user_id]['blend_images'].append(image_path)
                 num_images = len(self.params_cache[user_id]['blend_images'])
-                tip = f"✅ 已收到第 {num_images} 张图片。\n请继续发送图片，或发送 '{self.end_prefix}' 开始混合。"
+                tip = f"✅ 已收到第 {num_images} 张图片。\n请继续发送图片，或发送 '{self.end_prefix}' 开始多图编辑。"
                 reply = Reply(type=ReplyType.TEXT, content=tip)
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
@@ -447,7 +447,7 @@ class stability(Plugin):
                 except Exception as e:
                     logger.error(f"读取或编码图片失败 {image_path}: {e}")
                     # 可以选择跳过这张图片或中断处理
-                    rc = f"处理图片 {os.path.basename(image_path)} 时出错，混合失败。"
+                    rc = f"处理图片 {os.path.basename(image_path)} 时出错，多图编辑失败。"
                     rt = ReplyType.TEXT
                     reply = Reply(rt, rc)
                     e_context["reply"] = reply
@@ -463,7 +463,7 @@ class stability(Plugin):
             messages = [{"role": "user", "content": messages_content}]
 
             # 发送请求前的提示
-            tip_msg = f"⏳ 正在混合 {len(image_paths)} 张图片，请稍候..."
+            tip_msg = f"⏳ 正在编辑 {len(image_paths)} 张图片，请稍候..."
             self.send_reply(tip_msg, e_context)
 
 
@@ -493,7 +493,7 @@ class stability(Plugin):
                 image = self.img_to_png(imgpath) # 尝试保存为 png
 
                 if image is False:
-                    rc = "处理混合图片失败"
+                    rc = "多图编辑失败"
                     rt = ReplyType.TEXT
                 else:
                     rc = image
@@ -504,9 +504,9 @@ class stability(Plugin):
             else:
                 # 检查是否有文本回复解释原因
                 if isinstance(content, str) and content.strip():
-                    rc = f"图片混合无法完成。\n原因：{content}"
+                    rc = f"多图编辑无法完成。\n原因：{content}"
                 else:
-                    rc = "此图片混合请求无法完成，可能是触发了安全审核或模型无法处理。"
+                    rc = "此多图编辑请求无法完成，可能是触发了安全审核或模型无法处理。"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
@@ -514,7 +514,7 @@ class stability(Plugin):
 
         except openai.error.OpenAIError as e:
             logger.error(f"[stability] Blend service OpenAI API error: {e}")
-            rc = f"图片混合服务API出错: {str(e)}"
+            rc = f"多图编辑服务API出错: {str(e)}"
             rt = ReplyType.TEXT
             reply = Reply(rt, rc)
             e_context["reply"] = reply
@@ -524,7 +524,7 @@ class stability(Plugin):
             import traceback
             logger.error(traceback.format_exc())
 
-            rc = f"图片混合服务内部出错: {str(e)}"
+            rc = f"多图编辑服务内部出错: {str(e)}"
             rt = ReplyType.TEXT
             reply = Reply(rt, rc)
             e_context["reply"] = reply
