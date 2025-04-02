@@ -50,7 +50,7 @@ class falclient(Plugin):
             self.fal_kling_img_model = self.config.get("fal_kling_img_model", "kling-video/v1.6/standard/image-to-video")
             # 新增图生3D配置
             self.fal_hyper3d_img_prefix = self.config.get("fal_hyper3d_img_prefix", "图生3D")
-            self.fal_hyper3d_img_model = self.config.get("fal_hyper3d_img_model", "hyper3d/rodin") # 使用示例中的模型
+            self.fal_hyper3d_img_model = self.config.get("fal_hyper3d_img_model", "hyper3d/rodin") # 修正模型名称
 
             self.fal_api_key = self.config.get("fal_api_key", "")
             self.params_cache = ExpiredDict(500)
@@ -200,32 +200,16 @@ class falclient(Plugin):
                     "tier": "Regular", # 根据示例添加
                     "use_hyper": True # 根据示例添加
                 },
-                with_logs=True, # 开启日志以便调试
+                with_logs=False, # 根据反馈关闭调试日志
                 on_queue_update=on_queue_update,
             )
 
             logger.info(f"3D模型生成响应: {json.dumps(result, ensure_ascii=False)}")
 
-            # 检查结果中是否包含模型文件URL，hyper3d的返回结构可能不同，需要确认
-            # 假设返回结构类似 {"model_url": "...", ...} 或直接是URL列表
+            # 根据用户反馈的格式提取模型URL
             model_url = None
-            if isinstance(result, dict):
-                # 尝试常见的key
-                possible_keys = ['model_url', 'output_url', 'file_url', 'geometry_url']
-                for key in possible_keys:
-                    if key in result and isinstance(result[key], str):
-                        model_url = result[key]
-                        break
-                # 检查是否直接返回了URL列表
-                if not model_url and 'output' in result and isinstance(result['output'], list) and len(result['output']) > 0:
-                     # 查找第一个以 .glb 结尾的 URL
-                     for item in result['output']:
-                         if isinstance(item, dict) and 'url' in item and item['url'].endswith('.glb'):
-                             model_url = item['url']
-                             break
-                         elif isinstance(item, str) and item.endswith('.glb'):
-                             model_url = item
-                             break
+            if isinstance(result, dict) and 'model_mesh' in result and isinstance(result['model_mesh'], dict) and 'url' in result['model_mesh']:
+                model_url = result['model_mesh']['url']
 
             if model_url and model_url.endswith('.glb'):
                 output_dir = self.generate_unique_output_directory(TmpDir().path())
