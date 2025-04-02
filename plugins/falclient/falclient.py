@@ -101,7 +101,10 @@ class falclient(Plugin):
                     img_prompt = match.group(1).strip()
                     self.params_cache[user_id]['hyper3d_img_prompt'] = img_prompt
                     self.params_cache[user_id]['hyper3d_img_quota'] = 1
-                    tip = f"💡已经开启图片生成3D模型服务，请再发送一张图片进行处理，当前的提示词为:\n{img_prompt}" if img_prompt else "💡已经开启图片生成3D模型服务，请再发送一张图片进行处理。"
+                    if img_prompt:
+                        tip = f"💡已经开启图片生成3D模型服务，请再发送一张图片进行处理，当前的提示词为:\n{img_prompt}"
+                    else:
+                        tip = "💡已经开启图片生成3D模型服务，未检测到提示词，将使用默认效果。请再发送一张图片进行处理。" # 添加无提示词时的提示
                 else: # 理论上不会到这里
                     tip = f"💡欢迎使用图片生成3D模型服务，指令格式为:\n\n{self.fal_hyper3d_img_prefix} [对模型的描述]\n例如：{self.fal_hyper3d_img_prefix} A futuristic robot"
 
