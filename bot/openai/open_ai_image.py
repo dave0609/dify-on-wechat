@@ -32,6 +32,7 @@ class OpenAIImage(object):
                 n=1,  # 每次生成图片的数量
                 model=conf().get("text_to_image") or "dall-e-2",
                 # size=conf().get("image_create_size", "256x256"),  # 图片大小,可选有 256x256, 512x512, 1024x1024
+                request_timeout=1200, # 设置超时时间为1200秒 (20分钟)
             )
             self.send_revised_prompt(context, response["data"][0].get("revised_prompt", ""), query)
             image_url = response["data"][0]["url"]
