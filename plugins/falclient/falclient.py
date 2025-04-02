@@ -10,8 +10,7 @@ from common.tmp_dir import TmpDir
 from common.expired_dict import ExpiredDict
 import asyncio  # 新增导入
 import fal_client  # 新增导入
-import requests 
-import os
+import requests
 import os
 import uuid
 from glob import glob
@@ -21,7 +20,7 @@ from glob import glob
     name="falclient",
     desire_priority=2,
     desc="A plugin to call falclient API",
-    version="0.0.1",
+    version="0.0.2", # 版本号更新
     author="davexxx",
 )
 
@@ -40,7 +39,7 @@ class falclient(Plugin):
 
                 if not self.config:
                     raise Exception("config.json not found")
-            
+
             # 设置事件处理函数
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
             # 从配置中提取所需的设置
@@ -49,6 +48,10 @@ class falclient(Plugin):
             self.fal_kling_text_model = self.config.get("fal_kling_text_model", "kling-video/v1.6/standard/text-to-video")
             self.fal_kling_img_prefix = self.config.get("fal_kling_img_prefix", "图生视频")
             self.fal_kling_img_model = self.config.get("fal_kling_img_model", "kling-video/v1.6/standard/image-to-video")
+            # 新增图生3D配置
+            self.fal_hyper3d_img_prefix = self.config.get("fal_hyper3d_img_prefix", "图生3D")
+            self.fal_hyper3d_img_model = self.config.get("fal_hyper3d_img_model", "hyper3d/rodin") # 使用示例中的模型
+
             self.fal_api_key = self.config.get("fal_api_key", "")
             self.params_cache = ExpiredDict(500)
 
@@ -70,20 +73,37 @@ class falclient(Plugin):
         if user_id not in self.params_cache:
             self.params_cache[user_id] = {}
             self.params_cache[user_id]['kling_img_quota'] = 0
-            self.params_cache[user_id]['fal_kling_img_prefix'] = None
+            self.params_cache[user_id]['kling_img_prompt'] = None
+            self.params_cache[user_id]['hyper3d_img_quota'] = 0 # 新增
+            self.params_cache[user_id]['hyper3d_img_prompt'] = None # 新增
             logger.debug('Added new user to params_cache. user id = ' + user_id)
 
         if e_context['context'].type == ContextType.TEXT:
             if content.startswith(self.fal_kling_img_prefix):
-                pattern = self.fal_kling_img_prefix + r"\s(.+)"
+                pattern = self.fal_kling_img_prefix + r"\s*(.*)" # 允许prompt为空
                 match = re.match(pattern, content)
                 if match:  # 匹配上了kling的指令
-                    img_prompt = content[len(self.fal_kling_img_prefix):].strip()
+                    img_prompt = match.group(1).strip()
                     self.params_cache[user_id]['kling_img_prompt'] = img_prompt
                     self.params_cache[user_id]['kling_img_quota'] = 1
-                    tip = f"💡已经开启kling图片生成视频服务，请再发送一张图片进行处理，当前的提示词为:\n{img_prompt}"
-                else:
-                    tip = f"💡欢迎使用kling图片生成视频服务，指令格式为:\n\n{self.fal_kling_img_prefix} + 对视频的描述\n例如：{self.fal_kling_img_prefix} make the picture alive."
+                    tip = f"💡已经开启kling图片生成视频服务，请再发送一张图片进行处理，当前的提示词为:\n{img_prompt}" if img_prompt else "💡已经开启kling图片生成视频服务，请再发送一张图片进行处理。"
+                else: # 理论上不会到这里，因为 pattern 总是能匹配
+                    tip = f"💡欢迎使用kling图片生成视频服务，指令格式为:\n\n{self.fal_kling_img_prefix} [对视频的描述]\n例如：{self.fal_kling_img_prefix} make the picture alive."
+
+                reply = Reply(type=ReplyType.TEXT, content=tip)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+
+            elif content.startswith(self.fal_hyper3d_img_prefix): # 新增图生3D指令处理
+                pattern = self.fal_hyper3d_img_prefix + r"\s*(.*)" # 允许prompt为空
+                match = re.match(pattern, content)
+                if match:
+                    img_prompt = match.group(1).strip()
+                    self.params_cache[user_id]['hyper3d_img_prompt'] = img_prompt
+                    self.params_cache[user_id]['hyper3d_img_quota'] = 1
+                    tip = f"💡已经开启图片生成3D模型服务，请再发送一张图片进行处理，当前的提示词为:\n{img_prompt}" if img_prompt else "💡已经开启图片生成3D模型服务，请再发送一张图片进行处理。"
+                else: # 理论上不会到这里
+                    tip = f"💡欢迎使用图片生成3D模型服务，指令格式为:\n\n{self.fal_hyper3d_img_prefix} [对模型的描述]\n例如：{self.fal_hyper3d_img_prefix} A futuristic robot"
 
                 reply = Reply(type=ReplyType.TEXT, content=tip)
                 e_context["reply"] = reply
@@ -102,57 +122,186 @@ class falclient(Plugin):
                     e_context.action = EventAction.BREAK_PASS
 
         elif context.type == ContextType.IMAGE:
-            if self.params_cache[user_id]['kling_img_quota'] < 1:
-                # 进行下一步的操作                
-                logger.debug("on_handle_context: 当前用户生成视频配额不够，不进行识别")
+            # 检查是否有待处理的任务
+            kling_quota = self.params_cache[user_id].get('kling_img_quota', 0)
+            hyper3d_quota = self.params_cache[user_id].get('hyper3d_img_quota', 0)
+
+            if kling_quota < 1 and hyper3d_quota < 1:
+                logger.debug(f"on_handle_context: 用户 {user_id} 没有待处理的图片任务")
                 return
 
-            logger.info("on_handle_context: 开始处理图片")
+            logger.info(f"on_handle_context: 开始处理用户 {user_id} 的图片")
             context.get("msg").prepare()
             image_path = context.content
             logger.info(f"on_handle_context: 获取到图片路径 {image_path}")
 
-            if self.params_cache[user_id]['kling_img_quota'] > 0:
+            if kling_quota > 0:
                 self.params_cache[user_id]['kling_img_quota'] = 0
                 self.call_kling_service(image_path, user_id, e_context)
+            elif hyper3d_quota > 0: # 处理图生3D
+                self.params_cache[user_id]['hyper3d_img_quota'] = 0
+                self.call_hyper3d_service(image_path, user_id, e_context) # 调用新函数
 
-            # 删除文件
-            os.remove(image_path)
-            logger.info(f"文件 {image_path} 已删除")
-    
+            # 删除临时文件
+            try:
+                os.remove(image_path)
+                logger.info(f"临时文件 {image_path} 已删除")
+            except OSError as e:
+                 logger.error(f"删除临时文件 {image_path} 失败: {e}")
+
     def generate_unique_output_directory(self, base_dir):
         """Generate a unique output directory using a UUID."""
         unique_dir = os.path.join(base_dir, str(uuid.uuid4()))
         os.makedirs(unique_dir, exist_ok=True)
         return unique_dir
-    
+
     def is_valid_file(self, file_path, min_size=100*1024):  # 100KB
         """Check if the file exists and is greater than a given minimum size in bytes."""
         return os.path.exists(file_path) and os.path.getsize(file_path) > min_size
+
+    # 新增图生3D服务调用函数
+    def call_hyper3d_service(self, image_path, user_id, e_context):
+        try:
+            api_key = self.fal_api_key
+            prompt = self.params_cache[user_id].get('hyper3d_img_prompt', '') # 获取提示词，可以为空
+
+            tip = '您的3D模型生成请求已经进入队列，可能需要几分钟时间，请耐心等候。请注意：生成的结果将以glb文件形式发送。'
+            self.send_reply(tip, e_context)
+
+            client = fal_client.SyncClient(key=api_key)
+
+            logger.info(f"开始上传图片用于3D生成: {image_path}")
+            image_url = client.upload_file(image_path)
+            logger.info(f"图片上传成功，URL: {image_url}")
+
+            logger.info(f"开始使用图片URL生成3D模型，提示词: {prompt}")
+
+            def on_queue_update(update):
+                if isinstance(update, fal_client.InProgress):
+                    if update.logs and len(update.logs) > 0:
+                        latest_log = update.logs[-1]
+                        logger.info(f"3D处理进度: {latest_log['message']}")
+                elif isinstance(update, fal_client.Queued):
+                    static_position = getattr(on_queue_update, 'last_position', None)
+                    if static_position != update.position:
+                        logger.info(f"3D请求已排队，位置: {update.position}")
+                        on_queue_update.last_position = update.position
+
+            # 调用 hyper3d 模型
+            result = client.subscribe(
+                f"fal-ai/{self.fal_hyper3d_img_model}",
+                arguments={
+                    "prompt": prompt,
+                    "input_image_urls": [image_url], # 注意这里是列表
+                    "condition_mode": "concat", # 根据示例添加
+                    "geometry_file_format": "glb", # 根据示例添加
+                    "material": "Shaded", # 根据示例添加
+                    "quality": "high", # 根据示例添加
+                    "tier": "Regular", # 根据示例添加
+                    "use_hyper": True # 根据示例添加
+                },
+                with_logs=True, # 开启日志以便调试
+                on_queue_update=on_queue_update,
+            )
+
+            logger.info(f"3D模型生成响应: {json.dumps(result, ensure_ascii=False)}")
+
+            # 检查结果中是否包含模型文件URL，hyper3d的返回结构可能不同，需要确认
+            # 假设返回结构类似 {"model_url": "...", ...} 或直接是URL列表
+            model_url = None
+            if isinstance(result, dict):
+                # 尝试常见的key
+                possible_keys = ['model_url', 'output_url', 'file_url', 'geometry_url']
+                for key in possible_keys:
+                    if key in result and isinstance(result[key], str):
+                        model_url = result[key]
+                        break
+                # 检查是否直接返回了URL列表
+                if not model_url and 'output' in result and isinstance(result['output'], list) and len(result['output']) > 0:
+                     # 查找第一个以 .glb 结尾的 URL
+                     for item in result['output']:
+                         if isinstance(item, dict) and 'url' in item and item['url'].endswith('.glb'):
+                             model_url = item['url']
+                             break
+                         elif isinstance(item, str) and item.endswith('.glb'):
+                             model_url = item
+                             break
+
+            if model_url and model_url.endswith('.glb'):
+                output_dir = self.generate_unique_output_directory(TmpDir().path())
+                model_filename = f"hyper3d_{uuid.uuid4()}.glb"
+                model_path = os.path.join(output_dir, model_filename)
+
+                logger.info(f"开始下载3D模型: {model_url}")
+                model_response = requests.get(model_url)
+                model_response.raise_for_status() # 检查下载是否成功
+
+                with open(model_path, 'wb') as f:
+                    f.write(model_response.content)
+                logger.info(f"3D模型下载成功: {model_path}")
+
+                # 发送文件
+                self.send_reply(model_path, e_context, ReplyType.FILE)
+
+                # 发送完成提示
+                rt = ReplyType.TEXT
+                rc = "3D模型生成完毕。您可以使用https://gltf-viewer.donmccurdy.com在线导入模型查看效果。"
+                reply = Reply(rt, rc)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+            else:
+                rc = "3D模型生成失败或未找到有效的 .glb 文件链接，请检查日志或稍后重试。"
+                rt = ReplyType.TEXT
+                reply = Reply(rt, rc)
+                logger.error(f"[fal client] 未能从响应中提取有效的 .glb 模型URL: {result}")
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+
+        except fal_client.FalServerException as e:
+             rc = f"Fal 服务错误: {e}"
+             rt = ReplyType.TEXT
+             reply = Reply(rt, rc)
+             logger.error(f"[fal client] Fal 服务异常: {e}")
+             e_context["reply"] = reply
+             e_context.action = EventAction.BREAK_PASS
+        except requests.exceptions.RequestException as e:
+            rc = f"下载模型文件失败: {e}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            logger.error(f"[fal client] 下载模型文件异常: {e}")
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+        except Exception as e:
+            rc = f"处理3D模型生成时发生未知错误: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            logger.error(f"[fal client] 3D模型服务未知异常: {e}", exc_info=True)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
 
 
     def call_kling_service(self, image_path, user_id, e_context):
         try:
             # 设置 API 密钥
             api_key = self.fal_api_key
-            
+
             # 获取用户的提示词
             prompt = self.params_cache[user_id].get('kling_img_prompt', '')
-            
+
             tip = '您的视频请求已经进入队列，大概需要3-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
             self.send_reply(tip, e_context)
-            
+
             # 创建 fal_client 实例
             client = fal_client.SyncClient(key=api_key)
-            
+
             # 上传图片获取URL
             logger.info(f"开始上传图片: {image_path}")
             image_url = client.upload_file(image_path)
             logger.info(f"图片上传成功，URL: {image_url}")
-            
+
             # 使用图片URL生成视频
             logger.info(f"开始使用图片URL生成视频，提示词: {prompt}")
-            
+
             # 定义回调函数来处理队列更新
             def on_queue_update(update):
                 if isinstance(update, fal_client.InProgress):
@@ -166,7 +315,7 @@ class falclient(Plugin):
                     if static_position != update.position:
                         logger.info(f"请求已排队，位置: {update.position}")
                         on_queue_update.last_position = update.position
-            
+
             # 使用subscribe方法提交请求并等待结果
             result = client.subscribe(
                 f"fal-ai/{self.fal_kling_img_model}",
@@ -174,28 +323,29 @@ class falclient(Plugin):
                     "prompt": prompt,
                     "image_url": image_url
                 },
-                with_logs=False,
+                with_logs=False, # Kling不需要详细日志
                 on_queue_update=on_queue_update
             )
-            
+
             logger.info(f"视频生成响应: {json.dumps(result, ensure_ascii=False)}")
-            
+
             # 从结果中提取视频URL
             video_url = result.get("video", {}).get("url")
-            
+
             if video_url:
                 output_dir = self.generate_unique_output_directory(TmpDir().path())
-                
+
                 # 构建视频文件路径
                 video_path = os.path.join(output_dir, f"kling_{uuid.uuid4()}.mp4")
-                
+
                 # 下载视频
                 video_response = requests.get(video_url)
+                video_response.raise_for_status() # 检查下载是否成功
                 with open(video_path, 'wb') as f:
                     f.write(video_response.content)
-                
+
                 self.send_reply(video_path, e_context, ReplyType.VIDEO)
-                
+
                 # 发送完成提示
                 rt = ReplyType.TEXT
                 rc = "可灵视频生成完毕。"
@@ -209,12 +359,26 @@ class falclient(Plugin):
                 logger.error(f"[fal client] 未能从响应中提取视频URL: {result}")
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
-                
-        except Exception as e:
-            rc = f"服务暂不可用: {str(e)}"
+
+        except fal_client.FalServerException as e:
+             rc = f"Fal 服务错误: {e}"
+             rt = ReplyType.TEXT
+             reply = Reply(rt, rc)
+             logger.error(f"[fal client] Fal 服务异常: {e}")
+             e_context["reply"] = reply
+             e_context.action = EventAction.BREAK_PASS
+        except requests.exceptions.RequestException as e:
+            rc = f"下载视频文件失败: {e}"
             rt = ReplyType.TEXT
             reply = Reply(rt, rc)
-            logger.error(f"[fal client] 服务异常: {e}")
+            logger.error(f"[fal client] 下载视频文件异常: {e}")
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+        except Exception as e:
+            rc = f"处理视频生成时发生未知错误: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            logger.error(f"[fal client] Kling服务未知异常: {e}", exc_info=True)
             e_context["reply"] = reply
             e_context.action = EventAction.BREAK_PASS
 
@@ -223,11 +387,11 @@ class falclient(Plugin):
         try:
             # 设置 API 密钥
             api_key = self.fal_api_key
-            
+
             tip = '您的视频请求已经进入队列，大概需要3-6分钟，请耐心等候。请注意：由于协议限制，生成视频将会以文件形式发送。'
             self.send_reply(tip, e_context)
 
-            # 使用 REST API 发送请求
+            # 使用 REST API 发送请求 (Kling 文生图似乎推荐用 REST)
             url = f"https://fal.run/fal-ai/{self.fal_kling_text_model}"
             headers = {
                 "Authorization": f"Key {api_key}",
@@ -239,22 +403,24 @@ class falclient(Plugin):
 
             # 发送同步请求
             response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status() # 检查请求是否成功
             result = response.json()
-            
-            if 'video' in result:
+
+            if 'video' in result and isinstance(result['video'], dict) and 'url' in result['video']:
                 output_dir = self.generate_unique_output_directory(TmpDir().path())
 
-                video_url = result['video']['url']                    
+                video_url = result['video']['url']
                 # 构建视频文件路径
                 video_path = os.path.join(output_dir, f"kling_{uuid.uuid4()}.mp4")
-                
+
                 # 下载视频
                 video_response = requests.get(video_url)
+                video_response.raise_for_status() # 检查下载是否成功
                 with open(video_path, 'wb') as f:
                     f.write(video_response.content)
-                
+
                 self.send_reply(video_path, e_context, ReplyType.VIDEO)
-                
+
                 # 发送完成提示
                 rt = ReplyType.TEXT
                 rc = "可灵视频生成完毕。"
@@ -265,18 +431,25 @@ class falclient(Plugin):
                 rc="视频生成失败，请稍后重试"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
-                logger.error("[fal client ] service exception")
+                logger.error(f"[fal client] 未能从 REST API 响应中提取视频URL: {result}")
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
-                
-        except Exception as e:
-            rc= "服务暂不可用"
+
+        except requests.exceptions.RequestException as e:
+            rc = f"请求 Fal 服务或下载视频失败: {e}"
             rt = ReplyType.TEXT
             reply = Reply(rt, rc)
-            logger.error("[fal client ] service exception")
+            logger.error(f"[fal client] REST API 服务异常: {e}")
             e_context["reply"] = reply
             e_context.action = EventAction.BREAK_PASS
-        
+        except Exception as e:
+            rc= f"处理文生视频时发生未知错误: {str(e)}"
+            rt = ReplyType.TEXT
+            reply = Reply(rt, rc)
+            logger.error(f"[fal client] 文生视频服务未知异常: {e}", exc_info=True)
+            e_context["reply"] = reply
+            e_context.action = EventAction.BREAK_PASS
+
     def send_reply(self, reply, e_context: EventContext, reply_type=ReplyType.TEXT):
         if isinstance(reply, Reply):
             if not reply.type and reply_type:
@@ -286,10 +459,14 @@ class falclient(Plugin):
         channel = e_context['channel']
         context = e_context['context']
         # reply的包装步骤
-        rd = channel._decorate_reply(context, reply)
-        # reply的发送步骤
-        return channel._send_reply(context, rd)
-    
+        try:
+            rd = channel._decorate_reply(context, reply)
+            # reply的发送步骤
+            return channel._send_reply(context, rd)
+        except Exception as e:
+            logger.error(f"发送回复时出错: {e}")
+            return None # 或者根据需要处理错误
+
     def rename_file(self, filepath, prompt):
         # 提取目录路径和扩展名
         dir_path, filename = os.path.split(filepath)
@@ -299,7 +476,7 @@ class falclient(Plugin):
         cleaned_content = re.sub(r'[^\w]', '', prompt)
         # 截取prompt的前10个字符
         content_prefix = cleaned_content[:10]
-                
+
         # 组装新的文件名
         new_filename = f"{content_prefix}"
 
