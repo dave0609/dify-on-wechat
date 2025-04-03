@@ -1231,7 +1231,7 @@ class stability(Plugin):
             headers={
                 "Authorization": f"Bearer {self.jimeng_api_key}"
             },
-            json={"prompt": f"{jimeng_prompt}"} 
+            json={"model": "jimeng-3.0","prompt": f"{jimeng_prompt}"} 
         )
 
         if response.status_code == 200:
