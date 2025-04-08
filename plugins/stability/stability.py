@@ -312,7 +312,7 @@ class stability(Plugin):
                     logger.info(f"jimeng_prompt = : {jimeng_prompt}")
                     self.call_jimeng_service(jimeng_prompt, e_context)
                 else:
-                    tip = f"💡欢迎使用即梦AI绘图，指令格式为:\n\n{self.jimeng_prefix}+ 空格 + 主题(支持中文)\n例如：{self.jimeng_prefix} 一只可爱的猫"
+                    tip = f"💡欢迎使用即梦AI绘图3.0，指令格式为:\n\n{self.jimeng_prefix}+ 空格 + 主题(支持中文)\n例如：{self.jimeng_prefix} 一只可爱的猫"
                     reply = Reply(type=ReplyType.TEXT, content= tip)
                     e_context["reply"] = reply
                     e_context.action = EventAction.BREAK_PASS
@@ -1223,7 +1223,7 @@ class stability(Plugin):
     def call_jimeng_service(self, jimeng_prompt, e_context):
         logger.info(f"calling jimeng service")
 
-        tip = f'欢迎使用即梦AI.\n💡图片正在生成中，请耐心等待。\n当前使用的提示词为：\n{jimeng_prompt}'
+        tip = f'欢迎使用即梦3.0\n💡图片正在生成中，请耐心等待...'
         self.send_reply(tip, e_context)
 
         response = requests.post(
