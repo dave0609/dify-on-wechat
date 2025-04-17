@@ -252,7 +252,7 @@ class MidJourney(Plugin):
             if not prompt:
                 return Info("[MJ] 请输入要绘制的描述文字", e_context)
             self.sessions[self.sessionid] = _imgCache(self.sessionid, "imagine", prompt)
-            return Text(f"✨ 垫图模式\n✏ 请再发送一张图片", e_context)
+            return Text(f"✨ MJ垫图模式\n✏ 请再发送一张图片", e_context)
         elif pn == "blend_prefix":
             self.sessions[self.sessionid] = _imgCache(self.sessionid, "blend", prompt)
             return Text(f"✨ 混图模式\n✏ 请发送两张或多张图片，然后输入['{self.config['end_prefix'][0]}']结束", e_context)

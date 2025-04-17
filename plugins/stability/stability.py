@@ -186,9 +186,9 @@ class stability(Plugin):
                     # 存储到用户缓存中
                     self.params_cache[user_id]['edit_prompt'] = edit_prompt
                     self.params_cache[user_id]['inpaint_quota'] = 1
-                    tip = f"💡已经开启修图服务，请再发送一张图片进行处理"
+                    tip = f"💡已经开启gemini修图服务，请再发送一张图片进行处理"
                 else:
-                    tip = f"💡欢迎使用修图服务，修图指令格式为:\n\n{self.inpaint_prefix}+ 空格 + 描述\n例如: {self.inpaint_prefix} 把图片变成卡通风格"
+                    tip = f"💡欢迎使用gemini修图服务，修图指令格式为:\n\n{self.inpaint_prefix}+ 空格 + 描述\n例如: {self.inpaint_prefix} 把图片变成卡通风格"
 
                 reply = Reply(type=ReplyType.TEXT, content= tip)
                 e_context["reply"] = reply
@@ -326,7 +326,7 @@ class stability(Plugin):
                     # 存储到用户缓存中
                     self.params_cache[user_id]['image_edit_prompt'] = edit_prompt
                     self.params_cache[user_id]['image_edit_quota'] = 1
-                    tip = f"💡已经开启垫图服务，请再发送一张图片进行处理"
+                    tip = f"💡已经开启gpt-4o垫图服务，请再发送一张图片进行处理"
                 else:
                     tip = f"💡欢迎使用gpt-4o图片编辑功能，指令格式为:\n\n{self.image_edit_prefix}+ 空格 + 要编辑的提示词\n例如：{self.image_edit_prefix} 把图片变成吉卜力风格"
 
