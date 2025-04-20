@@ -131,8 +131,8 @@ class GeWeChatChannel(ChatChannel):
             # 清除 Markdown 格式后再发送
             reply_text = self.remove_markdown(reply.content).strip()
             # 检查文本长度并截断
-            if len(reply_text) > 4000:
-                reply_text = reply_text[:3997] + "..."
+            if len(reply_text) > 2048:
+                reply_text = reply_text[:2045] + "..."
             ats = ""
             # 检查回复内容是否已经包含@用户（可能带换行符）
             already_at_user = False
