@@ -130,9 +130,9 @@ class GeWeChatChannel(ChatChannel):
         if reply.type in [ReplyType.TEXT, ReplyType.ERROR, ReplyType.INFO]:
             # 清除 Markdown 格式后再发送
             reply_text = self.remove_markdown(reply.content).strip()
-            # 检查文本长度并截断
-            if len(reply_text) > 2000:
-                reply_text = reply_text[:1997] + "..."
+            # 检查文本长度并截断：使用字节数判断，避免拆分多字节字符，预留10字节冗余
+            if len(reply_text.encode('utf-8')) > 2038:
+                reply_text = reply_text.encode('utf-8')[:2038].decode('utf-8', 'ignore') + "..."
             ats = ""
             # 检查回复内容是否已经包含@用户（可能带换行符）
             already_at_user = False
