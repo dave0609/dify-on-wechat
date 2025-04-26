@@ -429,7 +429,7 @@ class stability(Plugin):
             self.send_reply(tip_msg, e_context)
             
             # 构建API请求URL
-            url = f"{self.openai_base_url}/images/edit"
+            url = f"{self.openai_base_url}/images/edits"
             
             # 构建请求头
             headers = {
@@ -661,7 +661,7 @@ class stability(Plugin):
             self.send_reply(tip_msg, e_context)
             
             # 构建API请求URL
-            url = f"{self.openai_base_url}/images/edit"
+            url = f"{self.openai_base_url}/images/edits"
             
             # 构建请求头
             headers = {
