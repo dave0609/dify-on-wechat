@@ -405,8 +405,8 @@ class stability(Plugin):
                      logger.error(f"删除文件 {image_path} 失败: {e}")
 
     def call_blend_service(self, image_paths, prompt, user_id, e_context):
-        """使用OpenAI的GPT-4o进行图片混合"""
-        logger.info(f"Calling blend service with GPT-4o for user {user_id}")
+        """使用gpt-image-1进行多图编辑/混合"""
+        logger.info(f"Calling blend service with gpt-image-1 for user {user_id}")
 
         if not self.openai_api_key or not self.openai_base_url:
             rc = "OpenAI API配置不完整，请在配置文件中设置open_ai_api_key和open_ai_api_base"
@@ -424,29 +424,32 @@ class stability(Plugin):
             return
 
         try:
-            import openai # 确保导入 openai
-
-            # 配置OpenAI API
-            openai.api_key = self.openai_api_key
-            openai.api_base = self.openai_base_url
-
-            # 构建 messages 列表
-            messages_content = [{"type": "text", "text": prompt}]
-            for image_path in image_paths:
+            # 发送请求前的提示
+            tip_msg = f"🎨 gpt-image-1多图编辑请求已进入队列，预计需要30-150秒完成, 请稍候...\n提示词：{prompt}"
+            self.send_reply(tip_msg, e_context)
+            
+            # 构建API请求URL
+            url = f"{self.openai_base_url}/images/edit"
+            
+            # 构建请求头
+            headers = {
+                "Authorization": f"Bearer {self.openai_api_key}"
+            }
+            
+            # 准备多图文件和请求数据
+            files = {}
+            
+            # 添加模型和提示词
+            files['model'] = (None, 'gpt-image-1')
+            files['prompt'] = (None, prompt)
+            
+            # 添加所有图片
+            for i, image_path in enumerate(image_paths):
                 try:
-                    with open(image_path, "rb") as image_file:
-                        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-                        messages_content.append({
-                            "type": "image_url",
-                            "image_url": {
-                                # 尝试自动判断图片类型或默认为 jpeg/png
-                                # GPT-4o 应该能处理常见的格式
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        })
+                    file_key = f'image' if i == 0 else f'image[{i}]'
+                    files[file_key] = (f'image{i}.png', open(image_path, 'rb'), 'image/png')
                 except Exception as e:
-                    logger.error(f"读取或编码图片失败 {image_path}: {e}")
-                    # 可以选择跳过这张图片或中断处理
+                    logger.error(f"读取图片失败 {image_path}: {e}")
                     rc = f"处理图片 {os.path.basename(image_path)} 时出错，多图编辑失败。"
                     rt = ReplyType.TEXT
                     reply = Reply(rt, rc)
@@ -459,66 +462,72 @@ class stability(Plugin):
                         except Exception as remove_e:
                             logger.error(f"Blend service error cleanup: 删除文件 {path} 失败: {remove_e}")
                     return
-
-            messages = [{"role": "user", "content": messages_content}]
-
-            # 发送请求前的提示
-            tip_msg = f"⏳ 正在编辑 {len(image_paths)} 张图片，请稍候..."
-            self.send_reply(tip_msg, e_context)
-
-
-            # 调用GPT-4o进行图像编辑/混合
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-image-vip", # 或者 "gpt-4o"
-                messages=messages
-                # 可以添加 max_tokens 等参数
+            
+            # 发送POST请求
+            logger.info("[stability] Sending blend request to API")
+            response = requests.post(
+                url, 
+                headers=headers, 
+                files=files,
+                timeout=300  # 设置较长的超时时间
             )
-
-            # 从响应中提取图片URL
-            content = response.choices[0].message.content
-            image_url = self.extract_image_url(content)
-
-            if image_url:
-                logger.info(f"生成的混合图像URL: {image_url}")
-
-                # 下载编辑后的图像
-                image_data = requests.get(image_url).content
-                imgpath = TmpDir().path() + "blended_" + str(uuid.uuid4()) + ".png"
-
-                with open(imgpath, 'wb') as file:
-                    file.write(image_data)
-
-                # 发送编辑后的图像
-                rt = ReplyType.IMAGE
-                image = self.img_to_png(imgpath) # 尝试保存为 png
-
-                if image is False:
-                    rc = "多图编辑失败"
-                    rt = ReplyType.TEXT
-                else:
-                    rc = image
-
+            
+            # 检查响应状态
+            if response.status_code != 200:
+                logger.error(f"[stability] API request failed with status code {response.status_code}: {response.text}")
+                rc = f"多图编辑失败: {response.text}"
+                rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
-            else:
-                # 检查是否有文本回复解释原因
-                if isinstance(content, str) and content.strip():
-                    rc = f"多图编辑无法完成。\n原因：{content}"
+                return
+            
+            # 解析JSON响应
+            result = response.json()
+            
+            # 处理返回结果
+            if "data" in result and len(result["data"]) > 0:
+                image_data = result["data"][0]
+                
+                if "b64_json" in image_data and image_data["b64_json"]:
+                    # 从base64获取图片数据
+                    image_bytes = base64.b64decode(image_data["b64_json"])
+                    
+                    # 保存到临时目录
+                    imgpath = TmpDir().path() + "blended_" + str(uuid.uuid4()) + ".png"
+                    with open(imgpath, 'wb') as file:
+                        file.write(image_bytes)
+                    
+                    logger.info(f"[stability] blended image saved to {imgpath}")
+                    
+                    # 发送编辑后的图像
+                    rt = ReplyType.IMAGE
+                    image = self.img_to_png(imgpath)
+                    
+                    if image is False:
+                        rc = "多图编辑失败"
+                        rt = ReplyType.TEXT
+                    else:
+                        rc = image
+                    
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
                 else:
-                    rc = "此多图编辑请求无法完成，可能是触发了安全审核或模型无法处理。"
+                    logger.error("[stability] No b64_json in response")
+                    rc = "多图编辑失败，API没有返回图片数据"
+                    rt = ReplyType.TEXT
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+            else:
+                logger.error("[stability] Invalid API response format")
+                rc = "多图编辑失败，API返回格式不正确"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
 
-        except openai.error.OpenAIError as e:
-            logger.error(f"[stability] Blend service OpenAI API error: {e}")
-            rc = f"多图编辑服务API出错: {str(e)}"
-            rt = ReplyType.TEXT
-            reply = Reply(rt, rc)
-            e_context["reply"] = reply
-            e_context.action = EventAction.BREAK_PASS
         except Exception as e:
             logger.error(f"[stability] Blend service exception: {e}")
             import traceback
@@ -633,8 +642,8 @@ class stability(Plugin):
                 logger.error(traceback.format_exc())
 
     def call_image_edit_service(self, image_path, user_id, e_context):
-        """使用OpenAI的GPT-4o进行图片编辑"""
-        logger.info(f"calling image edit service with GPT-4o")
+        """使用gpt-image-1进行图片编辑"""
+        logger.info(f"calling image edit service with gpt-image-1")
         
         if not self.openai_api_key or not self.openai_base_url:
             rc = "OpenAI API配置不完整，请在配置文件中设置open_ai_api_key和open_ai_api_base"
@@ -647,68 +656,85 @@ class stability(Plugin):
         edit_prompt = self.params_cache[user_id]['image_edit_prompt']
         
         try:
-            import openai
-            import base64
+            # 发送请求前的提示
+            tip_msg = f"🎨 gpt-image-1垫图请求已进入队列，预计需要30-150秒完成。请稍候...\n提示词：{edit_prompt}"
+            self.send_reply(tip_msg, e_context)
             
-            # 配置OpenAI API
-            openai.api_key = self.openai_api_key
-            openai.api_base = self.openai_base_url
+            # 构建API请求URL
+            url = f"{self.openai_base_url}/images/edit"
             
-            # 读取并编码图像
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            # 构建请求头
+            headers = {
+                "Authorization": f"Bearer {self.openai_api_key}"
+            }
             
-            # 调用GPT-4o进行图像编辑
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-image-vip",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": edit_prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
-                ]
+            # 准备图片文件
+            files = {
+                'image': ('image.png', open(image_path, 'rb'), 'image/png'),
+                'model': (None, 'gpt-image-1'),
+                'prompt': (None, edit_prompt)
+            }
+            
+            # 发送POST请求
+            logger.info("[stability] Sending image edit request to API")
+            response = requests.post(
+                url, 
+                headers=headers, 
+                files=files,
+                timeout=300  # 设置较长的超时时间
             )
             
-            # 从响应中提取图片URL
-            content = response.choices[0].message.content
-            image_url = self.extract_image_url(content)
-            
-            if image_url:
-                logger.info(f"生成的图像URL: {image_url}")
-                
-                # 下载编辑后的图像
-                image_data = requests.get(image_url).content
-                imgpath = TmpDir().path() + "edited_" + str(uuid.uuid4()) + ".png"
-                
-                with open(imgpath, 'wb') as file:
-                    file.write(image_data)
-                
-                # 发送编辑后的图像
-                rt = ReplyType.IMAGE
-                image = self.img_to_png(imgpath)
-                
-                if image is False:
-                    rc = "处理图片失败"
-                    rt = ReplyType.TEXT
-                else:
-                    rc = image
-                
+            # 检查响应状态
+            if response.status_code != 200:
+                logger.error(f"[stability] API request failed with status code {response.status_code}: {response.text}")
+                rc = f"图片编辑失败: {response.text}"
+                rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
+                return
+            
+            # 解析JSON响应
+            result = response.json()
+            
+            # 处理返回结果
+            if "data" in result and len(result["data"]) > 0:
+                image_data = result["data"][0]
+                
+                if "b64_json" in image_data and image_data["b64_json"]:
+                    # 从base64获取图片数据
+                    image_bytes = base64.b64decode(image_data["b64_json"])
+                    
+                    # 保存到临时目录
+                    imgpath = TmpDir().path() + "edited_" + str(uuid.uuid4()) + ".png"
+                    with open(imgpath, 'wb') as file:
+                        file.write(image_bytes)
+                    
+                    logger.info(f"[stability] edited image saved to {imgpath}")
+                    
+                    # 发送编辑后的图像
+                    rt = ReplyType.IMAGE
+                    image = self.img_to_png(imgpath)
+                    
+                    if image is False:
+                        rc = "处理图片失败"
+                        rt = ReplyType.TEXT
+                    else:
+                        rc = image
+                    
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
+                else:
+                    logger.error("[stability] No b64_json in response")
+                    rc = "图片编辑失败，API没有返回图片数据"
+                    rt = ReplyType.TEXT
+                    reply = Reply(rt, rc)
+                    e_context["reply"] = reply
+                    e_context.action = EventAction.BREAK_PASS
             else:
-                rc = "此绘图请求无法完成，可能是触发了版权审核，请尝试其他提示词或图片"
+                logger.error("[stability] Invalid API response format")
+                rc = "图片编辑失败，API返回格式不正确"
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
