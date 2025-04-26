@@ -326,9 +326,9 @@ class stability(Plugin):
                     # 存储到用户缓存中
                     self.params_cache[user_id]['image_edit_prompt'] = edit_prompt
                     self.params_cache[user_id]['image_edit_quota'] = 1
-                    tip = f"💡已经开启gpt-4o垫图服务，请再发送一张图片进行处理"
+                    tip = f"💡已经开启gpt-image-1垫图服务，请再发送一张图片进行处理"
                 else:
-                    tip = f"💡欢迎使用gpt-4o图片编辑功能，指令格式为:\n\n{self.image_edit_prefix}+ 空格 + 要编辑的提示词\n例如：{self.image_edit_prefix} 把图片变成吉卜力风格"
+                    tip = f"💡欢迎使用gpt-image-1图片编辑功能，指令格式为:\n\n{self.image_edit_prefix}+ 空格 + 要编辑的提示词\n例如：{self.image_edit_prefix} 把图片变成吉卜力风格"
 
                 reply = Reply(type=ReplyType.TEXT, content= tip)
                 e_context["reply"] = reply
@@ -475,7 +475,22 @@ class stability(Plugin):
             # 检查响应状态
             if response.status_code != 200:
                 logger.error(f"[stability] API request failed with status code {response.status_code}: {response.text}")
-                rc = f"多图编辑失败: {response.text}"
+                
+                # 检查是否是安全系统拒绝的错误
+                error_message = "多图编辑失败"
+                try:
+                    error_json = response.json()
+                    if "error" in error_json and "code" in error_json["error"]:
+                        if error_json["error"]["code"] == "moderation_blocked" or "safety" in error_json["error"]["message"].lower():
+                            error_message = "触发了图片的安全审查，请尝试使用其他图片或修改提示词。"
+                        else:
+                            error_message = f"{error_message}: {response.text}"
+                    else:
+                        error_message = f"{error_message}: {response.text}"
+                except:
+                    error_message = f"{error_message}: {response.text}"
+                
+                rc = error_message
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
@@ -687,7 +702,22 @@ class stability(Plugin):
             # 检查响应状态
             if response.status_code != 200:
                 logger.error(f"[stability] API request failed with status code {response.status_code}: {response.text}")
-                rc = f"图片编辑失败: {response.text}"
+    
+                # 检查是否是安全系统拒绝的错误
+                error_message = "图片编辑失败"
+                try:
+                    error_json = response.json()
+                    if "error" in error_json and "code" in error_json["error"]:
+                        if error_json["error"]["code"] == "moderation_blocked" or "safety" in error_json["error"]["message"].lower():
+                            error_message = "触发了图片的安全审查，请尝试使用其他图片或修改提示词。"
+                        else:
+                            error_message = f"{error_message}: {response.text}"
+                    else:
+                        error_message = f"{error_message}: {response.text}"
+                except:
+                    error_message = f"{error_message}: {response.text}"
+                
+                rc = error_message
                 rt = ReplyType.TEXT
                 reply = Reply(rt, rc)
                 e_context["reply"] = reply
