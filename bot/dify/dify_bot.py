@@ -108,7 +108,28 @@ class DifyBot(Bot):
                 # 调用OpenAIImage创建图片
                 success, result = self.image_creator.create_img(prompt, context=context)
                 if success:
-                    return Reply(ReplyType.IMAGE_URL, result), None
+                    try:
+                        # 使用 BytesIO 读取图片文件
+                        from io import BytesIO
+                        from PIL import Image
+                        
+                        # 打开图片文件
+                        img = Image.open(result)
+                        img_io = BytesIO()
+                        
+                        # 根据图片格式保存
+                        if img.format == 'PNG':
+                            img.save(img_io, format='PNG')
+                        else:
+                            img = img.convert('RGB')
+                            img.save(img_io, format='JPEG')
+                        
+                        img_io.seek(0)
+                        return Reply(ReplyType.IMAGE, img_io), None
+                    except Exception as e:
+                        logger.error(f"[DIFY] 处理图片文件失败: {e}")
+                        # 如果处理失败，尝试直接返回文件路径
+                        return Reply(ReplyType.IMAGE, result), None
                 else:
                     return Reply(ReplyType.TEXT, result), None
                 
