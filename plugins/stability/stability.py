@@ -167,7 +167,7 @@ class stability(Plugin):
                         self.params_cache[user_id]['blend_prompt'] = None
                         self.params_cache[user_id]['blend_images'] = []
                     else:
-                        tip = f"✨ 多图编辑模式\n✏ 您需要发送至少2张图片才能开始多图编辑。当前已发送 {len(blend_images)} 张。请继续发送图片或重新开始。"
+                        tip = f"✨ gpt-image-1多图编辑模式\n✏ 您需要发送至少2张图片才能开始多图编辑。当前已发送 {len(blend_images)} 张。请继续发送图片或重新开始。"
                         reply = Reply(type=ReplyType.TEXT, content=tip)
                         e_context["reply"] = reply
                         e_context.action = EventAction.BREAK_PASS
@@ -326,7 +326,7 @@ class stability(Plugin):
                     # 存储到用户缓存中
                     self.params_cache[user_id]['image_edit_prompt'] = edit_prompt
                     self.params_cache[user_id]['image_edit_quota'] = 1
-                    tip = f"💡已经开启gpt-image-1垫图服务，请再发送一张图片进行处理"
+                    tip = f"💡已经开启gpt-image-1图片编辑服务，请再发送一张图片进行处理"
                 else:
                     tip = f"💡欢迎使用gpt-image-1图片编辑功能，指令格式为:\n\n{self.image_edit_prefix}+ 空格 + 要编辑的提示词\n例如：{self.image_edit_prefix} 把图片变成吉卜力风格"
 
@@ -469,7 +469,7 @@ class stability(Plugin):
                 url, 
                 headers=headers, 
                 files=files,
-                timeout=300  # 设置较长的超时时间
+                timeout=1200  # 设置较长的超时时间
             )
             
             # 检查响应状态
@@ -696,7 +696,7 @@ class stability(Plugin):
                 url, 
                 headers=headers, 
                 files=files,
-                timeout=300  # 设置较长的超时时间
+                timeout=1200  # 设置较长的超时时间
             )
             
             # 检查响应状态
