@@ -469,7 +469,7 @@ class stability(Plugin):
 
             # 调用GPT-4o进行图像编辑/混合
             response = openai.ChatCompletion.create(
-                model="gpt-image-1-vip", # 或者 "gpt-4o"
+                model="gpt-4o-image-vip", # 或者 "gpt-4o"
                 messages=messages
                 # 可以添加 max_tokens 等参数
             )
@@ -660,7 +660,7 @@ class stability(Plugin):
             
             # 调用GPT-4o进行图像编辑
             response = openai.ChatCompletion.create(
-                model="gpt-image-1-vip",
+                model="gpt-4o-image-vip",
                 messages=[
                     {
                         "role": "user",
